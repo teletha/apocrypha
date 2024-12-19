@@ -1,13 +1,6 @@
 ---
 import { YukinaConfig } from "../../yukina.config";
-
-let hitokotoQueryUrl = `https://${YukinaConfig.HitokotoSettings.url}?max_length=20`;
-YukinaConfig.HitokotoSettings.content_types.forEach((type) => {
-  hitokotoQueryUrl += `&c=${type}`;
-});
 ---
-
-<hitokoto data-url={hitokotoQueryUrl}></hitokoto>
 
 <script>
   import lozad from "lozad";
@@ -34,31 +27,6 @@ YukinaConfig.HitokotoSettings.content_types.forEach((type) => {
     });
 
     observer.observe();
-  };
-
-  // 设置一言
-  let hitokotoText: string = "";
-  const setupHitokoto = async () => {
-    // 获取一言 API 地址
-    let hitokotoQueryUrl: string = "https://international.v1.hitokoto.cn";
-    const hitokotoUrlElement = document.querySelector(
-      "hitokoto",
-    ) as HTMLElement | null;
-    if (!hitokotoUrlElement) return;
-    hitokotoQueryUrl =
-      hitokotoUrlElement.getAttribute("data-url") || hitokotoQueryUrl;
-
-    // 获取一言内容
-    if (hitokotoText === "") {
-      const response = await fetch(hitokotoQueryUrl);
-      const { hitokoto, from } = await response.json();
-      hitokotoText = `${hitokoto} —— 「${from}」`;
-    }
-    const hitokoto = document.querySelector(
-      "#hitokoto_text",
-    ) as HTMLHeadingElement | null;
-    if (!hitokoto) return;
-    hitokoto.innerText = hitokotoText;
   };
 
   const setupLanguageSelector = () => {
@@ -120,7 +88,6 @@ YukinaConfig.HitokotoSettings.content_types.forEach((type) => {
   const setup = () => {
     setupUrlAnchor();
     setupLozad();
-    setupHitokoto();
     setupLanguageSelector();
     setupSearchBtn();
     setupScrollBar();

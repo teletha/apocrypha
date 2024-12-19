@@ -13,6 +13,8 @@ import { remarkTOC } from "./src/plugins/remark-toc.mjs";
 
 // https://astro.build/config
 export default defineConfig({
+  site: "https://teletha.github.io",
+  base: "/apocrypha",
   output: "static",
   integrations: [
     pagefind(),

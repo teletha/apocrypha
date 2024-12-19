@@ -4,7 +4,6 @@ import { parse } from "yaml";
 import { YukinaConfig } from "../../yukina.config";
 import { GetCoverURLForUnspecifiedEntry } from "../utils/cover";
 
-// 定义组件的属性
 export interface Props {
   title?: string;
   subTitle?: string;
@@ -13,9 +12,7 @@ export interface Props {
 }
 const { title, subTitle, headerImg, hashedSlug: slug } = Astro.props;
 
-// 判断是否有指定标题或副标题
 const hasTitle = title !== undefined || subTitle !== undefined;
-// 判断是否有指定头图
 const hasHeaderImg = headerImg !== undefined || slug !== undefined;
 
 let carouselImgsList = [] as string[];
@@ -52,30 +49,6 @@ const carouselAnimationTime = `${carouselImgsList.length * 6}s`;
             src={headerImg ?? GetCoverURLForUnspecifiedEntry(slug ?? "")}
             alt="post cover"
           />
-        </div>
-      )
-    }
-    {
-      (
-        <div class="relative h-[95%] w-full">
-          <div class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
-            <div class="flex flex-col">
-              <h1
-                class:list={[hasTitle ? "title-normal" : "title-index"]}
-                class="title"
-              >
-                {title ?? YukinaConfig.Title}
-              </h1>
-              {(!YukinaConfig.UseHitokotoSubtitle || subTitle) && (
-                <h2 class="subtitle">{subTitle ?? YukinaConfig.SubTitle}</h2>
-              )}
-              {YukinaConfig.UseHitokotoSubtitle && !subTitle && (
-                <h2 class="subtitle" id="hitokoto_text">
-                  {YukinaConfig.SubTitle}
-                </h2>
-              )}
-            </div>
-          </div>
         </div>
       )
     }
