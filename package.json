@@ -15,7 +15,7 @@
     "@swup/astro": "^1.4.1",
     "@tailwindcss/typography": "^0.5.15",
     "animejs": "^3.2.2",
-    "astro": "^4.16.7",
+    "astro": "^4.16.17",
     "astro-i18next": "^1.0.0-beta.21",
     "astro-pagefind": "^1.6.0",
     "lozad": "^1.16.0",
