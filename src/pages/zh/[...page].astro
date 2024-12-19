@@ -1,14 +1,14 @@
 ---
 import { changeLanguage } from "i18next";
 // Component Imports
-import Main from "../layouts/MainLayout.astro";
-import PostCard from "../components/PostCard.astro";
-import Pagination from "../components/control/Pagination.astro";
+import Main from "../../layouts/MainLayout.astro";
+import PostCard from "../../components/PostCard.astro";
+import Pagination from "../../components/control/Pagination.astro";
 // Utils
 import type { PaginateFunction } from "astro";
-import { GetSortedPosts } from "../utils/content";
+import { GetSortedPosts } from "../../utils/content";
 
-changeLanguage("ja");
+changeLanguage("zh");
 
 export async function getStaticPaths({ paginate, }: {
     paginate: PaginateFunction;

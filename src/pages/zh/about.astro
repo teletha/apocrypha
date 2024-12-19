@@ -1,11 +1,11 @@
 ---
 import { getEntry } from "astro:content";
 import { changeLanguage } from "i18next";
-import Main from "../layouts/MainLayout.astro";
-import Markdown from "../components/Markdown.astro";
-import CopyRight from "../components/misc/CopyRight.astro";
+import Main from "../../layouts/MainLayout.astro";
+import Markdown from "../../components/Markdown.astro";
+import CopyRight from "../../components/misc/CopyRight.astro";
 
-changeLanguage("ja");
+changeLanguage("zh");
 
 const aboutPost = await getEntry("spec", "about");
 const { Content } = await aboutPost.render();
