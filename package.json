@@ -1,5 +1,5 @@
 {
-  "name": "zenn",
+  "name": "apocrypha",
   "type": "module",
   "version": "0.0.1",
   "scripts": {
@@ -45,5 +45,5 @@
     "remark-math": "^6.0.0",
     "yaml": "^2.6.0"
   },
-  "packageManager": "yarn@4.5.3"
+  "packageManager": "bun@1.1.40"
 }
