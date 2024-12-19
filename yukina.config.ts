@@ -1,5 +1,6 @@
 export const YukinaConfig = {
   Title: "Apocrypha",
+  lang: 'en',
   SubTitle: "", // doesn't work when UseHitokotoSubtitle is true
   UseHitokotoSubtitle: false,
   Description: "Demo Site",
@@ -13,6 +14,9 @@ export const YukinaConfig = {
       link: "https://github.com/teletha",
     }
   ],
-
+  toc: {
+    enable: true,           // Display the table of contents on the right side of the post
+    depth: 2                // Maximum heading depth to show in the table, from 1 to 3
+  },
   EnableBanner: true
 };

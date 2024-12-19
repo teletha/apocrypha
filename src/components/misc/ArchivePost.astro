@@ -14,7 +14,7 @@ const { slug, title, pubilished } = Astro.props;
 
 function formatDate(date: Date): string {
   return date
-    .toLocaleDateString("zh-CN", {
+    .toLocaleDateString("ja-JP", {
       month: "2-digit",
       day: "2-digit",
     })
