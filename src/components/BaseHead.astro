@@ -1,0 +1,65 @@
+---
+// config
+import { YukinaConfig } from "../../yukina.config";
+
+// Scripts
+import ScriptSetup from "./ScriptSetup.astro";
+
+// styles
+import "overlayscrollbars/overlayscrollbars.css";
+
+// import "../styles/theme.css";
+import "../styles/animations.css";
+import "../styles/transitions.css";
+import "../styles/scrollbar.css";
+
+import { HeadHrefLangs } from "astro-i18next/components";
+import GlobalStyles from "./GlobalStyles.astro";
+---
+
+<!-- Global Metadata -->
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+<meta name="generator" content={Astro.generator} />
+<HeadHrefLangs />
+
+<!-- RSS Feed Discovery -->
+<link rel="alternate" type="application/rss+xml" title="RSS" href="/rss.xml" />
+
+<!-- Primary Meta Tags -->
+<title>{YukinaConfig.Title} - {YukinaConfig.Description}</title>
+<meta name="title" content={YukinaConfig.Title} />
+<meta name="description" content={YukinaConfig.Description} />
+
+<!-- Open Graph -->
+<meta property="og:type" content="website" />
+<meta property="og:url" content={Astro.url} />
+<!-- <meta property="og:title" content={MIRAI_CONFIG.TITILE} />
+<meta property="og:description" content={MIRAI_CONFIG.DESCRIPTION} /> -->
+<meta
+  property="og:image"
+  content={new URL("/placeholder-social.jpg", Astro.url)}
+/>
+
+<!-- 动态载入 iconfont css -->
+<link
+  rel="preload"
+  href={`https://${YukinaConfig.IconfontURL}`}
+  as="style"
+  onload="this.onload=null;this.rel='stylesheet'"
+/>
+<!-- Katex css -->
+<link
+  href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css"
+  rel="stylesheet"
+/>
+
+<!-- scripts -->
+<ScriptSetup />
+<script src="../scripts/global.ts"></script>
+
+<!-- GlobalStyles -->
+<GlobalStyles />
+
+<title>{YukinaConfig.Title}</title>

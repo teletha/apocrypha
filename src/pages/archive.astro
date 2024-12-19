@@ -1,0 +1,15 @@
+---
+import { changeLanguage, t } from "i18next";
+// Component Imports
+import PostArchiveLayout from "../layouts/PostArchiveLayout.astro";
+import { GetArchives } from "../utils/content";
+
+changeLanguage("zh");
+
+const archiveMap = await GetArchives();
+---
+
+<PostArchiveLayout
+  archiveMap={archiveMap}
+  title={t("pages.archive.archive") as string}
+/>

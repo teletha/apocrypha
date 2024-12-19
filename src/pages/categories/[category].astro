@@ -1,0 +1,39 @@
+---
+import { changeLanguage, t } from "i18next";
+import PostArchiveLayout from "../../layouts/PostArchiveLayout.astro";
+import { GetCategories, type Archive } from "../../utils/content";
+
+changeLanguage("zh");
+
+export async function getStaticPaths() {
+    const categories = await GetCategories();
+    const categoryList = Array.from(categories.keys());
+    return categoryList.map((category) => ({
+        params: { category: category },
+    }));
+}
+const categories = await GetCategories();
+const { category } = Astro.params;
+async function FormatArchiveMap() {
+    const posts = categories.get(category)!.posts;
+    const categoryName = categories.get(category)!.name;
+    const archiveMap = new Map<number, Array<Archive>>();
+    posts.forEach((post) => {
+        const year = post.date.getFullYear();
+        if (archiveMap.has(year)) {
+            archiveMap.get(year)!.push(post);
+        }
+        else {
+            archiveMap.set(year, [post]);
+        }
+    });
+    return { archiveMap, categoryName };
+}
+const { archiveMap, categoryName } = await FormatArchiveMap();
+---
+
+<PostArchiveLayout
+  archiveMap={archiveMap}
+  title={categoryName}
+  subTitle={t("pages.categories.archive") as string}
+/>

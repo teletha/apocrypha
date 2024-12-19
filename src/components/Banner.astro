@@ -1,0 +1,250 @@
+---
+import { readFileSync } from "node:fs";
+import { parse } from "yaml";
+import { YukinaConfig } from "../../yukina.config";
+import { GetCoverURLForUnspecifiedEntry } from "../utils/cover";
+
+// 定义组件的属性
+export interface Props {
+  title?: string;
+  subTitle?: string;
+  headerImg?: string;
+  hashedSlug?: string;
+}
+const { title, subTitle, headerImg, hashedSlug: slug } = Astro.props;
+
+// 判断是否有指定标题或副标题
+const hasTitle = title !== undefined || subTitle !== undefined;
+// 判断是否有指定头图
+const hasHeaderImg = headerImg !== undefined || slug !== undefined;
+
+let carouselImgsList = [] as string[];
+if (!hasHeaderImg) {
+  console.log("No header image specified, loading carousel images...");
+  const carouselImgs = readFileSync("data/carousel_imgs.yaml", "utf-8");
+  carouselImgsList = parse(carouselImgs) as string[];
+}
+const carouselAnimationTime = `${carouselImgsList.length * 6}s`;
+---
+
+<div id="banner" class="banner onload-animation-fade-in">
+  <div class="transition-main banner-inner h-full w-full">
+    {
+      !hasHeaderImg && (
+        <div class="carousel">
+          <ul id="carousel_imgs">
+            {carouselImgsList.map((img, index) => (
+              <li
+                class="item lozad"
+                style={{ animationDelay: `${index * 6}s` }}
+                data-background-image={img}
+              />
+            ))}
+          </ul>
+        </div>
+      )
+    }
+    {
+      hasHeaderImg && (
+        <div class="fixed">
+          <img
+            class="item lozad"
+            src={headerImg ?? GetCoverURLForUnspecifiedEntry(slug ?? "")}
+            alt="post cover"
+          />
+        </div>
+      )
+    }
+    {
+      (
+        <div class="relative h-[95%] w-full">
+          <div class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
+            <div class="flex flex-col">
+              <h1
+                class:list={[hasTitle ? "title-normal" : "title-index"]}
+                class="title"
+              >
+                {title ?? YukinaConfig.Title}
+              </h1>
+              {(!YukinaConfig.UseHitokotoSubtitle || subTitle) && (
+                <h2 class="subtitle">{subTitle ?? YukinaConfig.SubTitle}</h2>
+              )}
+              {YukinaConfig.UseHitokotoSubtitle && !subTitle && (
+                <h2 class="subtitle" id="hitokoto_text">
+                  {YukinaConfig.SubTitle}
+                </h2>
+              )}
+            </div>
+          </div>
+        </div>
+      )
+    }
+  </div>
+  <div class="waves" id="header-waves">
+    <svg
+      class="waves"
+      xmlns="http://www.w3.org/2000/svg"
+      xmlns:xlink="http://www.w3.org/1999/xlink"
+      viewBox="0 24 150 28"
+      preserveAspectRatio="none"
+      shape-rendering="auto"
+    >
+      <defs>
+        <path
+          id="gentle-wave"
+          d="M-160 44c30 0 58-18 88-18s 58 18 88 18 58-18 88-18 58 18 88 18 v44h-352z"
+        >
+        </path>
+      </defs>
+      <g class="parallax">
+        <use
+          xlink:href="#gentle-wave"
+          x="48"
+          y="0"
+          class="opacity-25"
+          style={{ animationDelay: "-2s", animationDuration: "7s" }}></use>
+        <use
+          xlink:href="#gentle-wave"
+          x="48"
+          y="3"
+          class="opacity-50"
+          style={{ animationDelay: "-3s", animationDuration: "10s" }}></use>
+        <use
+          xlink:href="#gentle-wave"
+          x="48"
+          y="5"
+          class="opacity-75"
+          style={{ animationDelay: "-4s", animationDuration: "13s" }}></use>
+        <use
+          xlink:href="#gentle-wave"
+          x="48"
+          y="7"
+          style={{ animationDelay: "-5s", animationDuration: "20s" }}></use>
+      </g>
+    </svg>
+  </div>
+</div>
+
+<script>
+  const styleElement = document.createElement("style");
+  const carouselImgs = document.getElementById("carousel_imgs");
+  const carouselImgsCount = carouselImgs?.children.length ?? 0;
+
+  const carouselAnimation = `
+  @keyframes carousel-animation {
+    0% {
+      opacity: 0;
+      transform: scale(1);
+    }
+    3% {
+      opacity: 1;
+    }
+    8% {
+      opacity: 1;
+      animation-timing-function: ease-out;
+    }
+    ${100 / carouselImgsCount}% {
+      opacity: 1;
+    }
+    ${100 / carouselImgsCount + 50 / carouselImgsCount}% {
+      opacity: 0;
+      animation-timing-function: ease-out;
+    }
+    100% {
+      opacity: 0;
+      transform: scale(2);
+    }
+  }
+  `;
+  styleElement.textContent = carouselAnimation;
+  document.getElementById("banner")?.appendChild(styleElement);
+</script>
+
+<style define:vars={{ carouselAnimationTime }}>
+  .banner {
+    @apply relative h-[var(--banner-height)] opacity-100;
+    /* animation: 300ms banner-onload-animation;
+    animation-fill-mode: forwards */
+  }
+
+  .carousel {
+    @apply absolute left-0 top-0 -z-10 block h-[var(--banner-height)] w-full overflow-hidden bg-white;
+    /* animation: 300ms banner-onload-animation; */
+    animation-fill-mode: forwards;
+  }
+
+  .carousel::before {
+    @apply absolute left-0 top-0 z-10 block h-full w-full bg-black/25 transition-all content-[''];
+    @apply dark:bg-black/30;
+  }
+
+  .carousel .item {
+    @apply absolute left-0 top-0 z-0 h-full w-full origin-center bg-cover bg-center bg-no-repeat opacity-0;
+    animation: carousel-animation var(--carouselAnimationTime) linear infinite
+      0s;
+    backface-visibility: hidden;
+    transform-style: preserve-3d;
+  }
+
+  .fixed {
+    @apply absolute left-0 top-0 z-0 block h-[var(--banner-height)] w-full overflow-hidden bg-white;
+  }
+
+  .fixed::before {
+    @apply absolute left-0 top-0 z-10 block h-full w-full bg-black/25 transition-all content-[''];
+    @apply dark:bg-black/30;
+  }
+
+  .fixed .item {
+    @apply h-full w-full object-cover;
+  }
+
+  .title {
+    @apply mx-auto text-center font-bold text-[var(--title-color)] drop-shadow-lg;
+    font-family: var(--title-font);
+  }
+
+  .title-index {
+    font-size: var(--index-title-font-size);
+  }
+
+  .title-normal {
+    font-size: var(--title-font-size);
+  }
+
+  .subtitle {
+    @apply mx-auto text-center text-[var(--subtitle-color)] drop-shadow-md;
+    font-size: var(--subtitle-font-size);
+    font-family: var(--subtitle-font);
+  }
+
+  .waves {
+    @apply absolute bottom-0 h-[10vh] max-h-[9.375rem] min-h-[3.125rem] w-full;
+    @apply md:h-[15vh];
+  }
+
+  .waves > .parallax use {
+    @apply fill-[var(--background-color)];
+    animation: wave 25s cubic-bezier(0.5, 0.5, 0.45, 0.5) infinite;
+  }
+
+  @keyframes wave {
+    0% {
+      transform: translate3d(-90px, 0, 0);
+    }
+    100% {
+      transform: translate3d(85px, 0, 0);
+    }
+  }
+
+  @keyframes banner-onload-animation {
+    0% {
+      opacity: 0;
+      height: calc(var(--banner-height) + 4rem);
+    }
+    100% {
+      opacity: 1;
+      height: var(--banner-height);
+    }
+  }
+</style>

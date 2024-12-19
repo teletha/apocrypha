@@ -1,0 +1,18 @@
+---
+import i18next from "i18next";
+
+import BaseHead from "../components/BaseHead.astro";
+---
+
+<html lang={i18next.language}>
+  <BaseHead />
+  <body class="overflow-hidden">
+    <slot />
+  </body>
+</html>
+
+<style>
+  body {
+    @apply bg-[var(--background-color)];
+  }
+</style>

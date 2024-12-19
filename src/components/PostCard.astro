@@ -1,0 +1,181 @@
+---
+import { t } from "i18next";
+// @ts-ignore
+import { localizePath } from "astro-i18next";
+
+import { SlugToRealSlug } from "../utils/hash";
+import Icon from "./widget/Icon.astro";
+import { GetCoverURLForUnspecifiedEntry } from "../utils/cover";
+
+export interface Props {
+  slug: string;
+  title: string;
+  published: Date;
+  category?: string;
+  tags?: string[];
+  description?: string;
+  image?: string;
+  entry: any;
+}
+
+const props = Astro.props;
+const entryID = SlugToRealSlug(props.slug);
+const contentUrl = `/posts/${entryID}`;
+const { remarkPluginFrontmatter } = await props.entry.render();
+
+function formatDate(date: Date): string {
+  return date
+    .toLocaleDateString("zh-CN", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    })
+    .replace(/\//g, "-");
+}
+---
+
+<div class="flex h-[212px] flex-row bg-[var(--card-color)] md:rounded-3xl">
+  <div class="flex w-full flex-col space-y-3 py-8 pl-3 lg:w-2/3 xl:w-3/5">
+    <div class="flex flex-row items-center">
+      <div class="mx-2 h-5 w-1 rounded-lg bg-[var(--primary-color)]"></div>
+      <a href={localizePath(contentUrl)} class="title">{props.title}</a>
+    </div>
+    <div class="space-y-3 px-5">
+      <div>
+        <ul class="flex flex-row space-x-4">
+          <li class="data space-x-2">
+            <Icon icon="ic-calendar" />
+            <span>{formatDate(props.published)}</span>
+          </li>
+          {
+            props.category && (
+              <li class="data space-x-2">
+                <Icon icon="ic-category" />
+                <a
+                  class="rounded-md px-1.5 py-0.5 text-[var(--text-color-lighten)] transition-all hover:bg-[var(--primary-color-lighten)] hover:text-[var(--primary-color)]"
+                  href={localizePath(
+                    `/categories/${SlugToRealSlug(props.category)}`,
+                  )}
+                >
+                  {props.category}
+                </a>
+              </li>
+            )
+          }
+          <li
+            class="hidden items-center overflow-clip md:block lg:hidden xl:block"
+          >
+            {
+              props.tags && (
+                <div class="data space-x-2">
+                  <Icon icon="ic-tag" />
+                  <ul class="flex flex-row items-center space-x-1">
+                    {props.tags.slice(0, 3).map((tag, index) => (
+                      <li class="flex select-none flex-row items-center text-[var(--text-color-lighten)]">
+                        {index > 0 && <span class="pr-1">/</span>}
+                        <a
+                          class="rounded-md px-1.5 py-0.5 transition-all hover:bg-[var(--primary-color-lighten)] hover:text-[var(--primary-color)]"
+                          href={localizePath(`/tags/${SlugToRealSlug(tag)}`)}
+                        >
+                          {tag}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                  {/* <span>{props.tags.slice(0, 3).join(" / ")}</span> */}
+                </div>
+              )
+            }
+          </li>
+        </ul>
+      </div>
+      <div>
+        <p class="desc">{props.description}</p>
+      </div>
+      <div class="select-none">
+        <div class="reading-time">
+          <span
+            >{remarkPluginFrontmatter.readingMetadata.wordCount}
+            {t("components.post_card.words")}</span
+          >
+          <span>|</span>
+          <span
+            >{remarkPluginFrontmatter.readingMetadata.time}
+            {t("components.post_card.minutes")}</span
+          >
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="cover-container">
+    <a href={localizePath(contentUrl)} class="cover-wrapper">
+      <i class="right-icon iconfont ic-right"></i>
+      <img
+        class="cover lozad"
+        src={props.image ?? GetCoverURLForUnspecifiedEntry(entryID)}
+        alt="post cover"
+      />
+    </a>
+  </div>
+</div>
+<style>
+  .title {
+    @apply align-top text-2xl font-semibold text-[var(--text-color)];
+    @apply transition-all hover:text-[var(--primary-color)];
+    font-family: var(--primary-font);
+  }
+
+  .data {
+    font-family: "Noto Sans SC", sans-serif;
+    @apply flex flex-row items-center;
+  }
+
+  .data > span {
+    @apply inline-block self-center truncate align-middle text-[var(--text-color-lighten)];
+    font-family: var(--primary-font);
+  }
+
+  .desc {
+    @apply min-h-[24px] truncate text-[var(--text-color)];
+    font-family: var(--primary-font);
+  }
+
+  .reading-time {
+    @apply space-x-3 align-middle text-sm text-[var(--text-color-lighten)];
+    font-family: var(--primary-font);
+  }
+
+  .cover-container {
+    @apply relative ml-2 hidden h-full w-1/3 select-none lg:block xl:w-2/5;
+    clip-path: polygon(0 0%, 100% 0%, 100% 100%, 10% 100%);
+  }
+
+  .cover-wrapper {
+    @apply h-full w-full select-none overflow-hidden rounded-r-3xl;
+  }
+
+  .cover-wrapper::before {
+    @apply absolute left-0 h-full w-0 select-none rounded-r-3xl bg-black opacity-50;
+    content: "";
+    z-index: 1;
+    transition: all 0.3s;
+  }
+
+  .cover-wrapper::before:hover {
+    @apply h-full w-full select-none;
+  }
+
+  .right-icon {
+    @apply absolute left-1/2 top-1/2 z-[10] -translate-x-1/2 -translate-y-1/2 text-[4rem] font-bold text-white;
+    clip-path: polygon(0 0, 0 0, 0 100%, 0 100%);
+    transition: all 0.3s;
+  }
+
+  .cover-wrapper:hover .right-icon {
+    clip-path: polygon(0 0, 100% 0%, 100% 100%, 0 100%);
+  }
+
+  .cover {
+    @apply h-full w-full select-none rounded-r-3xl object-cover dark:brightness-90;
+  }
+</style>

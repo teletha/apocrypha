@@ -1,0 +1,132 @@
+.article code:not(pre code)::before {
+  content: none !important;
+}
+
+.article code:not(pre code)::after {
+  content: none !important;
+}
+
+.article code:not(pre code) {
+  font-size: 15px !important;
+  font-family: "JetBrains Mono", "Fira Code", "Fira Mono", "Menlo", "Consolas",
+    "DejaVu Sans Mono", "monospace" !important;
+  padding: 4px;
+  border-radius: 4px;
+  color: var(--primary-color) !important;
+  background-color: var(--primary-color-lighten) !important;
+}
+
+.article h1,
+.article h2,
+.article h3,
+.article h4,
+.article h5,
+.article h6 {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  position: relative;
+}
+
+.article h1::before,
+.article h2::before,
+.article h3::before,
+.article h4::before,
+.article h5::before,
+.article h6::before {
+  position: absolute;
+  display: block;
+  content: " ";
+  background-color: var(--primary-color);
+  top: 3px;
+  bottom: 3px;
+  width: 0.3rem;
+  border-radius: 4px;
+}
+
+.article h1 > a,
+.article h2 > a,
+.article h3 > a,
+.article h4 > a,
+.article h5 > a,
+.article h6 > a {
+  margin: 0.5rem;
+}
+
+.article li::marker {
+  color: var(--primary-color) !important;
+}
+
+.article blockquote {
+  border-inline-start-color: var(--primary-color) !important;
+}
+
+.article blockquote {
+  font-style: normal !important;
+  border-radius: 0.25rem;
+  padding-left: 0.75rem !important;
+  background-color: var(--primary-color-lighten) !important;
+}
+
+.article blockquote p {
+  padding: 0;
+  margin: 0;
+  color: var(--text-color);
+}
+
+.article blockquote p:first-child {
+  padding-top: 0.3rem;
+}
+
+.article blockquote p:last-child {
+  padding-bottom: 0.3rem;
+}
+
+.article a {
+  color: var(--primary-color) !important;
+}
+
+.article hr {
+  margin-top: 36px;
+  margin-bottom: 36px;
+  border-color: var(--primary-color-lighten) !important;
+}
+
+.article pre {
+  overflow: hidden !important;
+}
+
+.article span.line {
+  font-size: 15px !important;
+  line-height: normal;
+  font-family: "JetBrains Mono", "Fira Code", "Fira Mono", "Menlo", "Consolas",
+    "DejaVu Sans Mono", "monospace" !important;
+}
+
+.article code {
+  counter-reset: line;
+}
+
+.article span.line:before {
+  content: counter(line);
+  counter-increment: line;
+  direction: rtl;
+  display: inline-block;
+  margin-right: 1rem;
+  width: 1rem;
+  color: rgba(255, 255, 255, 0.25);
+}
+
+.article span.line:last-child:empty,
+.article span.line:last-child:has(> .article span:empty:only-child) {
+  display: none;
+}
+
+.article p {
+  font-family: "Noto Sans SC", sans-serif;
+}
+
+.article .astro-code {
+  border-radius: 0.75rem !important;
+  scrollbar-width: thin;
+}

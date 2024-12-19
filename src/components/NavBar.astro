@@ -1,0 +1,179 @@
+---
+import { t } from "i18next";
+// @ts-ignore
+import { localizePath } from "astro-i18next";
+import LanguageSelector from "./control/LanguageSelector.astro";
+
+import { YukinaConfig } from "../../yukina.config";
+---
+
+<nav class="nav" id="nav">
+  <div class="nav-content">
+    <div class="brand after:content-['']">
+      <button type="button">
+        <i class="iconfont ic-list icon"></i>
+      </button>
+      <a class="title" href={localizePath("/")}>
+        {YukinaConfig.Title}
+      </a>
+    </div>
+    <a class="brand-lg" href={localizePath("/")}>
+      <p class="title">
+        <i class="iconfont ic-home icon min-w-[24px]"></i>
+        {YukinaConfig.Title}
+      </p>
+    </a>
+    <div class="menu">
+      <a href={localizePath("/")}>
+        <p>{t("components.nav_bar.home")}</p>
+      </a>
+      <a href={localizePath("/archive")}>
+        <p>{t("components.nav_bar.archive")}</p>
+      </a>
+      <!-- <a href="/bangumi">
+        <p>番剧</p>
+      </a> -->
+      <a href={localizePath("/about")}>
+        <p>{t("components.nav_bar.about")}</p>
+      </a>
+      <a href="https://github.com/WhitePaper233/yukina">
+        <p>{t("components.nav_bar.github")}</p>
+      </a>
+    </div>
+    <div class="toolbar">
+      <div class="search">
+        <button type="button" id="search-btn">
+          <i class="iconfont ic-search icon"></i>
+        </button>
+      </div>
+      <LanguageSelector />
+      <div class="theme">
+        <button type="button" id="theme-switcher">
+          <i class="iconfont icon" id="theme-icon"></i>
+        </button>
+      </div>
+    </div>
+  </div>
+</nav>
+<style>
+  .nav {
+    @apply fixed left-1/2 z-50 flex w-full select-none flex-col justify-end bg-[var(--card-color-transparent)] px-4 backdrop-blur-md transition-all;
+    @apply lg:w-[var(--page-width-lg)] lg:rounded-b-2xl xl:w-[var(--page-width-xl)];
+    transform: translateX(-50%);
+    animation: 500ms nav-onload-animation;
+    animation-delay: var(--onload-animation-delay);
+    animation-timing-function: ease-in;
+  }
+
+  .nav-hidden {
+    transform: translateY(-5rem) translateX(-50%);
+    transition-property: transform;
+    transition-duration: 300ms;
+  }
+
+  .nav-content {
+    @apply relative flex h-[4.5rem] w-full items-center justify-between overflow-visible;
+  }
+
+  .brand {
+    @apply flex w-full flex-row items-center justify-between;
+    @apply lg:hidden;
+  }
+
+  .brand > .title {
+    @apply content-center rounded-lg px-4 py-2 text-2xl text-[var(--primary-color)] transition-all;
+    @apply hover:bg-[var(--primary-color-hover)];
+    font-family: var(--brand-font);
+  }
+
+  .brand button {
+    @apply mr-2 flex h-[44px] w-[44px] flex-row items-center rounded-lg text-[var(--text-color)] transition-all;
+    @apply hover:bg-[var(--primary-color-hover)] hover:text-[var(--primary-color)];
+  }
+
+  .brand .icon {
+    @apply w-full text-center text-2xl;
+  }
+
+  .brand-lg {
+    @apply hidden h-[3.25rem] rounded-lg px-5 font-medium transition-all;
+    @apply lg:block;
+    @apply hover:bg-[var(--primary-color-hover)];
+    @apply active:scale-95;
+  }
+
+  .brand-lg > .title {
+    @apply flex h-full w-24 flex-row content-center items-center text-2xl text-[var(--primary-color)];
+    font-family: var(--brand-font);
+  }
+
+  .brand-lg .icon {
+    @apply mr-2 stroke-2 text-2xl;
+  }
+
+  .menu {
+    @apply absolute left-1/2 hidden -translate-x-1/2 items-center justify-between space-x-1 text-lg text-[var(--text-color)] opacity-85;
+    @apply lg:flex;
+  }
+
+  .menu a {
+    @apply flex h-[3.25rem] items-center rounded-lg px-6 transition-all;
+    @apply hover:bg-[var(--primary-color-hover)] hover:text-[var(--primary-color)];
+  }
+
+  .menu p {
+    @apply font-medium leading-normal;
+    font-family: var(--primary-font);
+  }
+
+  .toolbar {
+    @apply flex flex-row items-center justify-end space-x-1;
+  }
+
+  .toolbar button {
+    @apply min-w-11 max-w-11 rounded-lg px-3 py-2 text-[var(--text-color)] transition-all;
+    @apply hover:bg-[var(--primary-color-hover)] hover:text-[var(--primary-color)];
+  }
+
+  .toolbar .icon {
+    @apply stroke-2 text-xl;
+  }
+
+  @keyframes nav-onload-animation {
+    0% {
+      transform: translateY(-5rem) translateX(-50%);
+      opacity: 0;
+    }
+    100% {
+      transform: translateY(0) translateX(-50%);
+      opacity: 1;
+    }
+  }
+</style>
+
+<script>
+  // Theme switcher
+  const themeSwitcher = document.getElementById(
+    "theme-switcher",
+  ) as HTMLButtonElement;
+  const themeIcon = document.getElementById("theme-icon") as HTMLElement;
+
+  let currentTheme = localStorage.getItem("theme") || "light";
+
+  const setTheme = (theme: string) => {
+    document.documentElement.setAttribute("data-theme", theme);
+    localStorage.setItem("theme", theme);
+    currentTheme = theme;
+    themeIcon.classList.remove("ic-sun", "ic-moon");
+    themeIcon.classList.add(theme === "light" ? "ic-sun" : "ic-moon");
+    document.documentElement.classList.toggle("dark", theme === "dark");
+  };
+
+  themeSwitcher.addEventListener("click", () => {
+    setTheme(currentTheme === "light" ? "dark" : "light");
+  });
+
+  document.addEventListener("DOMContentLoaded", () => {
+    setTheme(currentTheme);
+  });
+</script>

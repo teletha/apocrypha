@@ -1,0 +1,46 @@
+---
+import { t } from "i18next";
+
+export interface Props {
+  year: number;
+  count: number;
+}
+
+const { year, count } = Astro.props;
+---
+
+<div class="mb-2 flex w-full flex-row items-center">
+  <div class="flex w-[15%] flex-row justify-end md:w-[10%]">
+    <p class="year text-2xl font-bold text-[var(--text-color)]">{year}</p>
+  </div>
+  <div class="dash-line relative flex h-full w-[15%] items-center md:w-[10%]">
+    <div
+      class="outline-3 z-50 mx-auto h-3 w-3 rounded-full bg-[var(--card-color)] bg-none outline -outline-offset-[2px] outline-[var(--primary-color)]"
+    >
+    </div>
+  </div>
+  <div>
+    <p class="count text-[var(--text-color-lighten)]">
+      {
+        t("components.archive_year_title.total_count").replace(
+          "{{count}}",
+          count.toString(),
+        )
+      }
+    </p>
+  </div>
+</div>
+<style>
+  .year {
+    font-family: "Noto Sans SC", sans-serif;
+  }
+
+  .count {
+    font-family: "Noto Sans SC", sans-serif;
+  }
+
+  .dash-line::before {
+    @apply absolute top-1/2 h-[24px] w-[10%] border-l-2 border-dashed border-l-[var(--text-color)] opacity-25 content-[''];
+    left: calc(50% - 1px);
+  }
+</style>
