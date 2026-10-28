@@ -31,8 +31,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.function.Consumer;
 
-import org.cef.callback.CefQueryCallback;
-
 import kiss.I;
 import kiss.JSON;
 
@@ -42,7 +40,7 @@ import kiss.JSON;
  * A channel is registered with {@link #handle(String, IpcHandler)} or automatically from methods
  * annotated with {@link IpcChannel} through {@link #register(Object)} or
  * {@link #register(Class)}. A request from the renderer is handled on a virtual thread, so the
- * Chromium UI thread is never blocked. The renderer can also emit named events to the Java side with
+ * webview UI thread is never blocked. The renderer can also emit named events to the Java side with
  * {@code apocrypha.emit(...)}; register those with {@link #on(String, Consumer)}.
  * <p>
  * Values are encoded with Sinobu ({@code I.write} / {@code I.json}). Application channels must not
@@ -75,6 +73,13 @@ public final class Ipc {
         builtin("apocrypha:event:emit", this::emitToJava);
         builtin("apocrypha:window:setTitle", request -> {
             window(request).title(request.string(0));
+            return null;
+        });
+        builtin("apocrypha:window:documentTitle", request -> {
+            Window window = request.window();
+            if (window != null) {
+                window.documentTitle(request.string(0));
+            }
             return null;
         });
         builtin("apocrypha:window:show", request -> {
@@ -150,6 +155,10 @@ public final class Ipc {
         });
         builtin("apocrypha:window:openDevTools", request -> {
             window(request).openDevTools();
+            return null;
+        });
+        builtin("apocrypha:window:openExternal", request -> {
+            application.openExternal(request.string(0));
             return null;
         });
         builtin("apocrypha:window:close", request -> {
@@ -317,9 +326,9 @@ public final class Ipc {
      * @param channel The channel.
      * @param arguments The arguments.
      * @param id The renderer query id.
-     * @param callback The native response callback.
+     * @param callback The response callback.
      */
-    void dispatch(Window window, String channel, List<String> arguments, long id, CefQueryCallback callback) {
+    void dispatch(Window window, String channel, List<String> arguments, long id, Consumer<String> callback) {
         IpcHandler handler = handlers.get(channel);
         if (handler == null) {
             respond(callback, response(id, "ENOENT", "No IPC handler is registered for channel: " + channel, null));
@@ -337,11 +346,11 @@ public final class Ipc {
         });
     }
 
-    private void respond(CefQueryCallback callback, String response) {
+    private void respond(Consumer<String> callback, String response) {
         try {
-            callback.success(response);
+            callback.accept(response);
         } catch (Throwable error) {
-            Application.logger.log(System.Logger.Level.DEBUG, "Failed to deliver an IPC response", error);
+            I.debug("apocrypha", new RuntimeException("Failed to deliver an IPC response", error));
         }
     }
 
@@ -371,7 +380,7 @@ public final class Ipc {
                 try {
                     listener.accept(payload);
                 } catch (Throwable error) {
-                    Application.logger.log(System.Logger.Level.WARNING, "IPC event listener failed: " + event, error);
+                    I.warn("apocrypha", new RuntimeException("IPC event listener failed: " + event, error));
                 }
             }
         }

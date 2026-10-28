@@ -10,20 +10,15 @@
 package apocrypha;
 
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
-import java.util.function.Consumer;
 import java.util.regex.Pattern;
 
 import com.formdev.flatlaf.FlatDarkLaf;
 import com.formdev.flatlaf.FlatLaf;
 
-import me.friwi.jcefmaven.CefAppBuilder;
-
 /**
- * Configures the application before the Chromium runtime is initialized.
+ * Configures the application before the webview runtime is initialized.
  * <p>
  * The configuration is intentionally mutable only while {@link Application#configure(ApplicationConfig)}
  * is running. After the application has started, all accessors return immutable values.
@@ -33,25 +28,19 @@ public final class ApplicationConfig {
     /** The name used when the application does not provide one. */
     static final String DEFAULT_NAME = "Apocrypha";
 
-    private static final Pattern SCHEME = Pattern.compile("[a-z][a-z0-9+.-]*");
-
     private static final Pattern ABSOLUTE_URL = Pattern.compile("^[a-zA-Z][a-zA-Z0-9+.-]*://.*");
 
     private String name;
 
     private String version;
 
-    private String scheme = "apocrypha";
-
-    private String host = "app";
+    private String baseUrl = "http://127.0.0.1:0/";
 
     private String resourceRoot = "web";
 
     private String entry = "index.html";
 
     private Path dataDirectory;
-
-    private Path installDirectory = Path.of("jcef-bundle");
 
     private boolean devTools;
 
@@ -62,10 +51,6 @@ public final class ApplicationConfig {
     private boolean restoreWindowState = true;
 
     private FlatLaf theme = new FlatDarkLaf();
-
-    private final List<String> cefArguments = new ArrayList<>();
-
-    private Consumer<CefAppBuilder> cefCustomizer;
 
     ApplicationConfig() {
     }
@@ -90,37 +75,6 @@ public final class ApplicationConfig {
      */
     public ApplicationConfig version(String version) {
         this.version = Objects.requireNonNull(version, "version");
-        return this;
-    }
-
-    /**
-     * Set the custom URL scheme used to serve the bundled frontend. The default is
-     * {@code apocrypha}.
-     * 
-     * @param scheme A standard URL scheme.
-     * @return This configuration.
-     */
-    public ApplicationConfig scheme(String scheme) {
-        String value = requireText(scheme, "scheme").toLowerCase(Locale.ROOT);
-        if (!SCHEME.matcher(value).matches()) {
-            throw new IllegalArgumentException("Invalid URL scheme: " + scheme);
-        }
-        this.scheme = value;
-        return this;
-    }
-
-    /**
-     * Set the host component of the application URL. The default is {@code app}.
-     * 
-     * @param host A host name.
-     * @return This configuration.
-     */
-    public ApplicationConfig host(String host) {
-        String value = requireText(host, "host");
-        if (value.contains("/") || value.contains(":")) {
-            throw new IllegalArgumentException("Invalid URL host: " + host);
-        }
-        this.host = value;
         return this;
     }
 
@@ -161,8 +115,11 @@ public final class ApplicationConfig {
     }
 
     /**
-     * Set the directory where Chromium stores its user data. The default is
+     * Set the directory where the framework stores application state. The default is
      * {@code ~/.apocrypha/<application-name>}.
+     * <p>
+     * Window position, size, and maximized state are written to {@code window-state.json} in this
+     * directory. The platform webview (avaje-webview) manages its own browser profile separately.
      * 
      * @param directory A writable directory.
      * @return This configuration.
@@ -173,21 +130,10 @@ public final class ApplicationConfig {
     }
 
     /**
-     * Set the directory where the JCEF native bundle is installed. The default is
-     * {@code jcef-bundle} in the working directory.
+     * Enable the webview developer tools. They can then be opened with {@code F12} or from the
+     * context menu. The default is {@code false}.
      * 
-     * @param directory A directory for the native JCEF bundle.
-     * @return This configuration.
-     */
-    public ApplicationConfig installDirectory(Path directory) {
-        this.installDirectory = Objects.requireNonNull(directory, "directory");
-        return this;
-    }
-
-    /**
-     * Open the Chromium developer tools automatically after the first page has loaded.
-     * 
-     * @param enable Whether to open the developer tools.
+     * @param enable Whether to enable the developer tools.
      * @return This configuration.
      */
     public ApplicationConfig devTools(boolean enable) {
@@ -236,45 +182,18 @@ public final class ApplicationConfig {
     }
 
     /**
-     * Set the FlatLaf theme. The default is {@link FlatDarkLaf}.
+     * Set the FlatLaf theme used by Swing dialogs and components. The default is
+     * {@link FlatDarkLaf}.
      * <p>
-     * Apocrypha enables FlatLaf window decorations for every window. FlatLaf uses its own title
-     * bar and window border on Windows 10/11 and Linux, and keeps the native window decorations on
-     * macOS. Use {@code new FlatLightLaf()} for the light theme.
+     * The main application window is a native avaje-webview window with the operating system's
+     * decorations, so this theme does not change its title bar. Use {@code new FlatLightLaf()} for
+     * the light theme.
      * 
      * @param theme A FlatLaf theme.
      * @return This configuration.
      */
     public ApplicationConfig theme(FlatLaf theme) {
         this.theme = Objects.requireNonNull(theme, "theme");
-        return this;
-    }
-
-    /**
-     * Add command line switches for Chromium.
-     * 
-     * @param arguments Chromium switches, such as {@code --disable-gpu}.
-     * @return This configuration.
-     */
-    public ApplicationConfig cefArguments(String... arguments) {
-        Objects.requireNonNull(arguments, "arguments");
-        for (String argument : arguments) {
-            if (argument != null && !argument.isBlank()) {
-                cefArguments.add(argument);
-            }
-        }
-        return this;
-    }
-
-    /**
-     * Customize the low-level JCEF builder. This is the escape hatch for advanced settings which
-     * are not exposed by this configuration.
-     * 
-     * @param customizer A builder customizer.
-     * @return This configuration.
-     */
-    public ApplicationConfig configureCef(Consumer<CefAppBuilder> customizer) {
-        this.cefCustomizer = Objects.requireNonNull(customizer, "customizer");
         return this;
     }
 
@@ -297,24 +216,6 @@ public final class ApplicationConfig {
     }
 
     /**
-     * The custom URL scheme.
-     * 
-     * @return The scheme.
-     */
-    public String scheme() {
-        return scheme;
-    }
-
-    /**
-     * The host component of the application URL.
-     * 
-     * @return The host.
-     */
-    public String host() {
-        return host;
-    }
-
-    /**
      * The classpath directory containing the frontend build.
      * 
      * @return The resource root.
@@ -333,9 +234,9 @@ public final class ApplicationConfig {
     }
 
     /**
-     * The Chromium user data directory.
+     * The directory where the framework stores application state.
      * 
-     * @return The user data directory.
+     * @return The data directory.
      */
     public Path dataDirectory() {
         if (dataDirectory != null) {
@@ -345,18 +246,9 @@ public final class ApplicationConfig {
     }
 
     /**
-     * The JCEF native bundle installation directory.
+     * Whether the webview developer tools are enabled.
      * 
-     * @return The installation directory.
-     */
-    public Path installDirectory() {
-        return installDirectory;
-    }
-
-    /**
-     * Whether the developer tools should open automatically.
-     * 
-     * @return True to open developer tools.
+     * @return True if the developer tools are enabled.
      */
     public boolean devTools() {
         return devTools;
@@ -390,7 +282,7 @@ public final class ApplicationConfig {
     }
 
     /**
-     * The FlatLaf theme used for windows and Swing components.
+     * The FlatLaf theme used by Swing dialogs and components.
      * 
      * @return A theme.
      */
@@ -399,30 +291,23 @@ public final class ApplicationConfig {
     }
 
     /**
-     * Additional Chromium switches.
-     * 
-     * @return An immutable list of switches.
-     */
-    public List<String> cefArguments() {
-        return List.copyOf(cefArguments);
-    }
-
-    /**
-     * The low-level JCEF builder customizer, if any.
-     * 
-     * @return A customizer or {@code null}.
-     */
-    public Consumer<CefAppBuilder> cefCustomizer() {
-        return cefCustomizer;
-    }
-
-    /**
-     * The application base URL.
+     * The base URL which serves the bundled frontend. The application server binds to an ephemeral
+     * loopback port while the application starts, so the value is final once {@code onStart()} runs.
      * 
      * @return The base URL.
      */
     public String baseUrl() {
-        return scheme + "://" + host + "/";
+        return baseUrl;
+    }
+
+    /**
+     * Bind the base URL to the application server. This is called by the framework.
+     * 
+     * @param baseUrl A loopback URL.
+     */
+    void baseUrl(String baseUrl) {
+        String value = requireText(baseUrl, "baseUrl");
+        this.baseUrl = value.endsWith("/") ? value : value + "/";
     }
 
     /**

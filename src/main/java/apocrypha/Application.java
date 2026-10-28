@@ -9,9 +9,11 @@
  */
 package apocrypha;
 
+import java.awt.Desktop;
 import java.awt.GraphicsEnvironment;
 import java.io.IOException;
 import java.lang.management.ManagementFactory;
+import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -24,28 +26,19 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.concurrent.atomic.AtomicReference;
 
 import javax.swing.JDialog;
 import javax.swing.JFrame;
 import javax.swing.SwingUtilities;
-import javax.swing.Timer;
 
 import com.formdev.flatlaf.FlatLaf;
 
-import org.cef.CefApp;
-import org.cef.CefApp.CefAppState;
-import org.cef.callback.CefSchemeRegistrar;
-
-import me.friwi.jcefmaven.CefAppBuilder;
-import me.friwi.jcefmaven.CefInitializationException;
-import me.friwi.jcefmaven.MavenCefAppHandlerAdapter;
-import me.friwi.jcefmaven.UnsupportedPlatformException;
+import kiss.I;
 
 /**
  * The Java side of an Apocrypha application.
  * <p>
- * An application owns the Chromium runtime, all windows, and the IPC bridge. Subclasses configure
+ * An application owns the webview runtime, all windows, and the IPC bridge. Subclasses configure
  * the runtime in {@link #configure(ApplicationConfig)}, create windows in {@link #onStart()}, and
  * release application resources in {@link #onExit()}.
  *
@@ -71,12 +64,7 @@ public abstract class Application {
     /** The framework version exposed to the renderer. */
     public static final String FRAMEWORK_VERSION = "0.1";
 
-    /** The framework logger. */
-    static final System.Logger logger = System.getLogger("apocrypha");
-
     private static final String RESTART_PARENT = "--apocrypha-restart-parent=";
-
-    private static final int QUIT_GRACE_MILLIS = 300;
 
     private static final int RESTART_WAIT_SECONDS = 30;
 
@@ -102,13 +90,9 @@ public abstract class Application {
 
     private WindowStateStore windowStates;
 
-    private Timer windowStateTimer;
-
     private int windowSequence;
 
-    private CefApp cefApp;
-
-    private volatile boolean running;
+    private AppServer server;
 
     private volatile boolean quitting;
 
@@ -118,12 +102,12 @@ public abstract class Application {
     /**
      * Launch an application.
      * <p>
-     * This method initializes Chromium on the calling thread and then schedules the application
-     * lifecycle on the AWT event thread. It returns after the lifecycle has been scheduled.
+     * This method starts the embedded application server on the calling thread and then schedules
+     * the application lifecycle on the AWT event thread. It returns after the lifecycle has been
+     * scheduled.
      * 
      * @param type An application class with an accessible no-argument constructor.
-     * @param args Command line arguments. Switches beginning with {@code --} are forwarded to
-     *        Chromium.
+     * @param args Command line arguments.
      * @return The launched application.
      */
     public static Application launch(Class<? extends Application> type, String... args) {
@@ -148,7 +132,7 @@ public abstract class Application {
     }
 
     /**
-     * Configure the application before Chromium starts.
+     * Configure the application before the webview starts.
      * 
      * @param config The mutable configuration.
      */
@@ -162,8 +146,8 @@ public abstract class Application {
     }
 
     /**
-     * Release application resources. This method runs on the AWT event thread before Chromium is
-     * disposed.
+     * Release application resources. This method runs on the AWT event thread before the windows
+     * and the application server are disposed.
      */
     protected void onExit() {
     }
@@ -187,7 +171,7 @@ public abstract class Application {
     }
 
     /**
-     * The Chromium user data directory.
+     * The directory where the framework stores application state.
      * 
      * @return A directory.
      */
@@ -232,21 +216,15 @@ public abstract class Application {
         if (quitting) {
             throw new IllegalStateException("The application is shutting down");
         }
-
-        if (SwingUtilities.isEventDispatchThread()) {
-            return createWindowOnEdt(url);
+        if (server == null) {
+            throw new IllegalStateException("Windows cannot be created before the application server starts; use onStart()");
         }
 
-        AtomicReference<Window> reference = new AtomicReference<>();
-        try {
-            SwingUtilities.invokeAndWait(() -> reference.set(createWindowOnEdt(url)));
-        } catch (InterruptedException error) {
-            Thread.currentThread().interrupt();
-            throw new IllegalStateException("Interrupted while creating a window", error);
-        } catch (java.lang.reflect.InvocationTargetException error) {
-            throw new IllegalStateException("Failed to create a window", error.getCause());
-        }
-        return reference.get();
+        String target = url == null || url.isBlank() ? config.entryUrl() : (url
+                .contains("://") ? url : config.url(url));
+        Window window = new Window(this, target, nextWindowId());
+        windows.add(window);
+        return window;
     }
 
     /**
@@ -265,8 +243,8 @@ public abstract class Application {
      * <p>
      * The new process is launched with the same Java executable, JVM options (debug-agent switches
      * excepted), classpath or jar, working directory, and application arguments. It waits for this
-     * process to exit before initializing Chromium, so the JCEF cache lock is released and the saved
-     * window state can be restored.
+     * process to exit before creating the webview, so the previous native window is released and
+     * the saved window state can be restored.
      * <p>
      * This requires the application to be started through {@link #launch(Class, String...)}. The
      * call runs {@link #onExit()} before the old process exits; the new process runs
@@ -298,20 +276,12 @@ public abstract class Application {
         info.put("platform", System.getProperty("os.name", "unknown"));
         info.put("arch", System.getProperty("os.arch", "unknown"));
         info.put("java", System.getProperty("java.version", "unknown"));
-        info.put("cef", cefVersion());
+        info.put("webview", webviewVersion());
         return info;
     }
 
     String bridgeScript() {
         return bridge.script();
-    }
-
-    CefApp cefApp() {
-        return cefApp;
-    }
-
-    ResourceLoader resourceLoader() {
-        return loader;
     }
 
     WindowStateStore.State windowState(String id) {
@@ -322,43 +292,18 @@ public abstract class Application {
     }
 
     /**
-     * Schedule a window state save. Move and resize events are coalesced so dragging a window does
-     * not write the JSON file for every pixel.
-     */
-    void windowStateChanged() {
-        if (quitting || windowStates == null || !config.restoreWindowState()) {
-            return;
-        }
-        if (!SwingUtilities.isEventDispatchThread()) {
-            SwingUtilities.invokeLater(this::windowStateChanged);
-            return;
-        }
-        if (windowStateTimer == null) {
-            windowStateTimer = new Timer(400, event -> saveWindowStates());
-            windowStateTimer.setRepeats(false);
-        }
-        windowStateTimer.restart();
-    }
-
-    /**
      * Persist the state of every open window.
      */
     void saveWindowStates() {
         if (windowStates == null || !config.restoreWindowState()) {
             return;
         }
-        if (!SwingUtilities.isEventDispatchThread()) {
-            SwingUtilities.invokeLater(this::saveWindowStates);
-            return;
-        }
 
         Map<String, WindowStateStore.State> states = new LinkedHashMap<>();
         for (Window window : windows) {
-            if (!window.isClosed()) {
-                WindowStateStore.State state = window.windowState();
-                if (state != null) {
-                    states.put(window.id(), state);
-                }
+            WindowStateStore.State state = window.windowState();
+            if (state != null) {
+                states.put(window.id(), state);
             }
         }
         windowStates.putAll(states);
@@ -371,29 +316,7 @@ public abstract class Application {
         }
     }
 
-    /**
-     * Whether disposing this window will terminate the application. In that case the window leaves
-     * the CEF client to {@link CefApp#dispose()} to avoid racing the client close callbacks.
-     * 
-     * @param window A window.
-     * @return True if the application will quit.
-     */
-    boolean willQuitOnClose(Window window) {
-        return quitting || (config.quitWhenLastWindowClosed() && windows.size() == 1);
-    }
-
-    private Window createWindowOnEdt(String url) {
-        if (cefApp == null) {
-            throw new IllegalStateException("Windows cannot be created before Chromium is initialized; use onStart()");
-        }
-        String target = url == null || url.isBlank() ? config.entryUrl() : (url
-                .contains("://") ? url : config.url(url));
-        Window window = new Window(this, target, nextWindowId());
-        windows.add(window);
-        return window;
-    }
-
-    private String nextWindowId() {
+    private synchronized String nextWindowId() {
         int index = ++windowSequence;
         return index == 1 ? "main" : "window-" + index;
     }
@@ -423,61 +346,32 @@ public abstract class Application {
         Path data = config.dataDirectory();
         try {
             Files.createDirectories(data);
-            Files.createDirectories(data.resolve("cache"));
         } catch (IOException error) {
-            throw new IllegalStateException("Failed to create the Chromium user data directory: " + data, error);
+            throw new IllegalStateException("Failed to create the application data directory: " + data, error);
         }
 
         this.windowStates = new WindowStateStore(data.resolve("window-state.json"));
         this.ipc = new Ipc(this);
-        startCef(args);
+        startBrowser();
         SwingUtilities.invokeLater(this::startUi);
     }
 
-    private void startCef(String[] args) {
-        CefAppBuilder builder = new CefAppBuilder();
-        builder.setInstallDir(config.installDirectory().toFile());
-        builder.getCefSettings().root_cache_path = config.dataDirectory().toString();
-        builder.getCefSettings().cache_path = config.dataDirectory().resolve("cache").toString();
-        builder.getCefSettings().persist_session_cookies = true;
-
-        builder.addJcefArgs(config.cefArguments().toArray(String[]::new));
-        for (String argument : args) {
-            if (argument != null && argument.startsWith("--") && !argument.startsWith("--apocrypha-")
-                    && !argument.equals("--devtools")) {
-                builder.addJcefArgs(argument);
-            }
-        }
-        if (config.cefCustomizer() != null) {
-            config.cefCustomizer().accept(builder);
-        }
-        builder.getCefSettings().windowless_rendering_enabled = false;
-
-        builder.setAppHandler(new MavenCefAppHandlerAdapter() {
-            @Override
-            public void onRegisterCustomSchemes(CefSchemeRegistrar registrar) {
-                registrar.addCustomScheme(config.scheme(), true, false, false, true, true, false, true);
-            }
-
-            @Override
-            public void stateHasChanged(CefAppState state) {
-                if (state == CefAppState.TERMINATED && running) {
-                    SwingUtilities.invokeLater(Application.this::quit);
-                }
-            }
-        });
+    private void startBrowser() {
+        this.bridge = new Bridge(config, webviewVersion());
+        this.loader = new ResourceLoader(config, bridge);
 
         try {
-            this.cefApp = builder.build();
-        } catch (IOException | UnsupportedPlatformException | InterruptedException | CefInitializationException error) {
-            if (error instanceof InterruptedException) {
-                Thread.currentThread().interrupt();
-            }
-            throw new IllegalStateException("Failed to initialize Chromium", error);
+            this.server = new AppServer(loader);
+            this.server.start();
+        } catch (IOException error) {
+            throw new IllegalStateException("Failed to start the application server", error);
         }
 
-        this.bridge = new Bridge(config, cefVersion());
-        this.loader = new ResourceLoader(config, bridge);
+        config.baseUrl(server.baseUrl());
+    }
+
+    private static String webviewVersion() {
+        return "avaje-webview";
     }
 
     private void startUi() {
@@ -486,26 +380,24 @@ public abstract class Application {
         }
 
         installLookAndFeel();
-        running = true;
-        logger.log(System.Logger.Level.INFO, "Starting " + config.name() + " " + config.version() + " (" + config
+        I.info("apocrypha", "Starting " + config.name() + " " + config.version() + " (" + config
                 .baseUrl() + ")");
         try {
             onStart();
         } catch (Throwable error) {
-            logger.log(System.Logger.Level.ERROR, "The application failed to start", error);
+            I.error("apocrypha", new RuntimeException("The application failed to start", error));
             quit();
         }
     }
 
     /**
-     * Install the configured FlatLaf theme and enable its window decorations. This must run on the
-     * event dispatch thread before the first window is created.
+     * Install the configured FlatLaf theme for Swing dialogs. The main window is a native
+     * avaje-webview window and is not affected by the Swing look and feel.
      */
     private void installLookAndFeel() {
         FlatLaf.setup(config.theme());
 
-        // On Windows 10/11 FlatLaf uses its window decorations automatically. On Linux the frames
-        // must opt in before they are created. macOS keeps its native decorations.
+        // Keep the decorations for any Swing dialogs or frames created by the application.
         JFrame.setDefaultLookAndFeelDecorated(true);
         JDialog.setDefaultLookAndFeelDecorated(true);
     }
@@ -521,7 +413,7 @@ public abstract class Application {
             command = restartCommand();
         } catch (Throwable error) {
             restarting = false;
-            logger.log(System.Logger.Level.ERROR, "Failed to prepare a restart", error);
+            I.error("apocrypha", new RuntimeException("Failed to prepare a restart", error));
             return;
         }
 
@@ -533,10 +425,10 @@ public abstract class Application {
             }
             builder.inheritIO();
             Process process = builder.start();
-            logger.log(System.Logger.Level.INFO, "Restarting " + config.name() + " in process " + process.pid());
+            I.info("apocrypha", "Restarting " + config.name() + " in process " + process.pid());
         } catch (Throwable error) {
             restarting = false;
-            logger.log(System.Logger.Level.ERROR, "Failed to restart " + config.name(), error);
+            I.error("apocrypha", new RuntimeException("Failed to restart " + config.name(), error));
             return;
         }
 
@@ -645,7 +537,7 @@ public abstract class Application {
             try {
                 pid = Long.parseLong(argument.substring(RESTART_PARENT.length()));
             } catch (NumberFormatException error) {
-                logger.log(System.Logger.Level.WARNING, "Invalid restart parent pid: " + argument);
+                I.warn("apocrypha", "Invalid restart parent pid: " + argument);
                 continue;
             }
             if (pid <= 0 || pid == ProcessHandle.current().pid()) {
@@ -654,21 +546,21 @@ public abstract class Application {
 
             try {
                 ProcessHandle.of(pid).ifPresent(previous -> {
-                    logger.log(System.Logger.Level.INFO, "Waiting for previous process " + pid + " to exit");
+                    I.info("apocrypha", "Waiting for previous process " + pid + " to exit");
                     try {
                         previous.onExit().get(RESTART_WAIT_SECONDS, TimeUnit.SECONDS);
                     } catch (TimeoutException error) {
-                        logger.log(System.Logger.Level.WARNING,
+                        I.warn("apocrypha",
                                 "Timed out waiting for previous process " + pid + "; continuing");
                     } catch (InterruptedException error) {
                         Thread.currentThread().interrupt();
                     } catch (ExecutionException error) {
-                        logger.log(System.Logger.Level.WARNING, "Failed to wait for previous process " + pid,
-                                error.getCause());
+                        I.warn("apocrypha",
+                                new RuntimeException("Failed to wait for previous process " + pid, error.getCause()));
                     }
                 });
             } catch (RuntimeException error) {
-                logger.log(System.Logger.Level.WARNING, "Failed to inspect previous process " + pid, error);
+                I.warn("apocrypha", new RuntimeException("Failed to inspect previous process " + pid, error));
             }
         }
     }
@@ -705,23 +597,18 @@ public abstract class Application {
         }
 
         quitting = true;
-        running = false;
-        if (windowStateTimer != null) {
-            windowStateTimer.stop();
-            windowStateTimer = null;
-        }
         try {
             onExit();
         } catch (Throwable error) {
-            logger.log(System.Logger.Level.ERROR, "The application failed to stop cleanly", error);
+            I.error("apocrypha", new RuntimeException("The application failed to stop cleanly", error));
         }
         saveWindowStates();
 
         for (Window window : List.copyOf(windows)) {
             try {
-                window.dispose();
+                window.close();
             } catch (Throwable error) {
-                logger.log(System.Logger.Level.WARNING, "Failed to dispose a window", error);
+                I.warn("apocrypha", new RuntimeException("Failed to close a window", error));
             }
         }
         windows.clear();
@@ -729,51 +616,52 @@ public abstract class Application {
         if (ipc != null) {
             ipc.close();
         }
-        disposeCefSoon();
-    }
-
-    private void disposeCefSoon() {
-        if (cefApp == null) {
-            completeQuit();
-            return;
-        }
-
-        // Let browser close callbacks from windows disposed immediately before quit finish before
-        // CefApp.dispose() acquires its monitors.
-        Timer timer = new Timer(QUIT_GRACE_MILLIS, event -> completeQuit());
-        timer.setRepeats(false);
-        timer.start();
-    }
-
-    private void completeQuit() {
-        if (cefApp != null) {
+        if (server != null) {
             try {
-                cefApp.dispose();
+                server.close();
             } catch (Throwable error) {
-                logger.log(System.Logger.Level.WARNING, "Failed to dispose Chromium", error);
+                I.warn("apocrypha", new RuntimeException("Failed to stop the application server", error));
             }
-            cefApp = null;
+            server = null;
         }
         if (current == this) {
             current = null;
         }
-        logger.log(System.Logger.Level.INFO, "Stopped " + config.name());
+        I.info("apocrypha", "Stopped " + config.name());
         System.exit(0);
     }
 
-    private String cefVersion() {
-        if (cefApp == null) {
-            return "unknown";
+    /**
+     * Open an external URL in the operating system browser.
+     * 
+     * @param url An HTTP, HTTPS, or mailto URL.
+     */
+    void openExternal(String url) {
+        if (url == null || url.isBlank()) {
+            return;
         }
         try {
-            CefApp.CefVersion version = cefApp.getVersion();
-            if (version == null) {
-                return "unknown";
+            URI uri = URI.create(url);
+            String scheme = uri.getScheme();
+            if (!"http".equalsIgnoreCase(scheme) && !"https".equalsIgnoreCase(scheme)
+                    && !"mailto".equalsIgnoreCase(scheme)) {
+                return;
             }
-            return version.CHROME_VERSION_MAJOR + "." + version.CHROME_VERSION_MINOR + "." + version.CHROME_VERSION_BUILD
-                    + "." + version.CHROME_VERSION_PATCH;
-        } catch (Throwable error) {
-            return "unknown";
+            Thread.startVirtualThread(() -> {
+                try {
+                    if (Desktop.isDesktopSupported()) {
+                        if ("mailto".equalsIgnoreCase(scheme)) {
+                            Desktop.getDesktop().mail(uri);
+                        } else {
+                            Desktop.getDesktop().browse(uri);
+                        }
+                    }
+                } catch (Throwable error) {
+                    I.warn("apocrypha", new RuntimeException("Failed to open external URL: " + url, error));
+                }
+            });
+        } catch (RuntimeException error) {
+            I.warn("apocrypha", new RuntimeException("Invalid external URL: " + url, error));
         }
     }
 

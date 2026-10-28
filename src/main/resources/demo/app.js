@@ -12,7 +12,7 @@
 
     if (!bridge) {
         setOutput('#greet-result', 'The Apocrypha bridge was not injected into this page.', true);
-        setOutput('#sum-result', 'Open this page through the apocrypha:// scheme.', true);
+        setOutput('#sum-result', 'Open this page through the Apocrypha application server.', true);
         return;
     }
 
@@ -74,7 +74,7 @@
     const initializeRuntime = async () => {
         const app = bridge.app;
         $('#metric-java').textContent = 'Java ' + app.java;
-        $('#metric-cef').textContent = 'CEF ' + app.cef;
+        $('#metric-webview').textContent = 'WebView ' + app.webview;
         $('#metric-platform').textContent = app.arch;
         $('#framework-version').textContent = 'v' + app.frameworkVersion;
         $('#fact-name').textContent = app.name;
@@ -125,7 +125,7 @@
     $('#devtools').addEventListener('click', async () => {
         try {
             await bridge.window.openDevTools();
-            setOutput('#window-result', 'Developer tools requested.');
+            setOutput('#window-result', 'Developer tools: press F12 or use the context menu (start with --devtools).');
         } catch (error) {
             setOutput('#window-result', describeError(error), true);
         }
@@ -160,7 +160,7 @@
 
     initializeRuntime();
     getSize();
-    greet('JCEF');
+    greet('WebView');
     sum();
     window.scrollTo(0, 0);
 })();

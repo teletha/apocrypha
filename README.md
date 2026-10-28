@@ -7,11 +7,11 @@
 </p>
 
 ## Summary
-Apocrypha is an Electron-style desktop application framework for Java. The backend runs on the JVM and the user interface is built with standard web technologies (HTML, CSS, and JavaScript) rendered by Chromium through [JCEF](https://bitbucket.org/chromiumembedded/java-cef).
+Apocrypha is an Electron-style desktop application framework for Java. The backend runs on the JVM and the user interface is built with standard web technologies (HTML, CSS, and JavaScript) rendered by the platform webview through [avaje-webview](https://github.com/avaje/avaje-webview).
 
-* Java application lifecycle, native windows with FlatLaf decorations, and configuration
-* Chromium renderer embedded in a Swing `JFrame` through JCEF
-* `apocrypha://` protocol which serves a frontend build directly from the classpath
+* Java application lifecycle, native webview windows, and configuration
+* Native webview window with OS decorations through avaje-webview
+* A loopback HTTP server which serves a frontend build directly from the classpath
 * A preload bridge which exposes `window.apocrypha` without requiring a bundler plugin
 * Asynchronous request/response IPC and bidirectional events
 * Typed errors which arrive in JavaScript as rejected promises
@@ -21,25 +21,25 @@ Apocrypha is an Electron-style desktop application framework for Java. The backe
 * Application restart from Java or JavaScript, preserving window state
 * Works with any browser toolchain that can emit static files (Vite, React, Vue, Svelte, and so on)
 
-JSON is handled by [Sinobu](https://github.com/teletha/sinobu) (`I.write`, `I.json`, and `kiss.JSON`); Gson is not used by the framework. (Gson remains a transitive dependency of jcefmaven.)
+JSON is handled by [Sinobu](https://github.com/teletha/sinobu) (`I.write`, `I.json`, and `kiss.JSON`); Gson is not used by the framework.
 
 ## Architecture
 
 ```
 +--------------------- Java backend ---------------------+
-|  Application -> Window -> CefBrowser (JCEF)            |
+|  Application -> Window -> Webview (avaje-webview)       |
 |       |              |                                 |
-|       +---- Ipc <----+---- CefMessageRouter            |
+|       +---- Ipc <----+---- bound JS functions          |
 +----------------------|---------------------------------+
                        |  JSON request / response
                        |  events
 +----------------------|---------------------------------+
-|  window.apocrypha <--+  Chromium renderer             |
-|  HTML / CSS / JavaScript                                |
+|  window.apocrypha <--+  native webview                 |
+|  HTML / CSS / JavaScript                               |
 +--------------------------------------------------------+
 ```
 
-The custom scheme is registered as a standard, secure, CORS-enabled, fetch-enabled scheme. Requests are resolved against a classpath directory. HTML responses receive an external bridge script, and single-page fallback responses also receive a root base URL, so a strict CSP can allow the bridge with `'self'`.
+The frontend is served from an ephemeral HTTP server bound to the loopback interface. Requests are resolved against a classpath directory. HTML responses receive an external bridge script, and single-page fallback responses also receive a root base URL, so a strict CSP can allow the bridge with `'self'`.
 
 ## Quick Start
 
@@ -189,7 +189,7 @@ ipc().register(NotesHandlers.class); // class registration (requires a no-arg co
 
 ## JavaScript API
 
-The bridge is injected automatically into HTML served through the application scheme.
+The bridge is injected automatically into HTML served by the application server.
 
 | API | Description |
 | --- | --- |
@@ -199,7 +199,7 @@ The bridge is injected automatically into HTML served through the application sc
 | `apocrypha.off(event, listener)` | Remove a listener. |
 | `apocrypha.emit(event, payload)` | Emit an event to Java. |
 | `apocrypha.ready` | A promise which resolves as soon as the bridge is available. |
-| `apocrypha.app` | Application name, version, framework version, platform, architecture, Java and CEF versions. |
+| `apocrypha.app` | Application name, version, framework version, platform, architecture, Java and webview versions. |
 | `apocrypha.app.quit()` | Quit the application. |
 | `apocrypha.app.restart()` | Restart the application in a new JVM process. |
 | `apocrypha.window.setTitle(title)` | Change the native window title. |
@@ -218,7 +218,7 @@ The bridge is injected automatically into HTML served through the application sc
 | `apocrypha.window.setResizable(value)` | Toggle resizing. |
 | `apocrypha.window.reload()` | Reload the current document. |
 | `apocrypha.window.load(url)` | Navigate the window. |
-| `apocrypha.window.openDevTools()` | Open Chromium developer tools. |
+| `apocrypha.window.openDevTools()` | Log how to open the webview developer tools. |
 | `apocrypha.window.close()` | Close the window. |
 
 ## Frontend Tooling
@@ -243,28 +243,35 @@ During development, write the watch build directly to the compiled resource dire
 vite build --watch --outDir target/classes/web
 ```
 
-Alternatively, point `entry` at the Vite development server (`http://localhost:5173/`). The bridge is injected after the document loads, so IPC calls made during initial page evaluation need the classpath build or a manually included bridge script.
+Alternatively, point `entry` at the Vite development server (`http://localhost:5173/`). The bridge is injected as a document-start user script, so IPC is available during initial page evaluation.
 
-Because the protocol reads resources from the classpath, Chromium's regular developer tools, network panel, console, and source maps work as usual.
+Because the server reads resources from the classpath, the webview's regular developer tools, network panel, console, and source maps work as usual.
 
 ## Configuration
 
 `ApplicationConfig` provides:
 
 * `name`, `version` - application metadata
-* `scheme`, `host` - the application URL (default `apocrypha://app/`)
 * `resourceRoot` - classpath directory containing the frontend (default `web`)
 * `entry` - entry document or an absolute URL for a development server
-* `dataDirectory` - Chromium user data directory
-* `installDirectory` - JCEF native bundle location (default `jcef-bundle`)
-* `devTools` - open developer tools after the first load
+* `dataDirectory` - framework state directory (default `~/.apocrypha/<application-name>`)
+* `devTools` - enable the webview developer tools (default `false`)
 * `spaFallback` - serve the entry document for extension-less routes
-* `theme` - FlatLaf theme and window decoration colors (default `FlatDarkLaf`)
+* `theme` - FlatLaf theme for Swing dialogs and components (default `FlatDarkLaf`)
 * `restoreWindowState` - persist and restore window bounds and maximized state (default `true`)
-* `cefArguments` - additional Chromium switches
-* `configureCef` - low-level JCEF builder customization
 
-For development, `entry("http://localhost:5173/")` loads an external page. The bridge is injected after the document loads; for calls during initial page evaluation, use the classpath build or add the bridge script manually.
+For development, `entry("http://localhost:5173/")` loads an external page. The bridge is injected as a document-start user script, so it is available to the page immediately.
+
+## Migrating from JCEF
+
+The browser backend is avaje-webview now, so a few JCEF-specific APIs are gone:
+
+* The `webview_java` backend and its JNA dependencies were replaced by avaje-webview, which uses Java 25 FFM and the system WebView2 runtime.
+* The `apocrypha://` scheme and the `scheme` / `host` configuration were removed. The frontend is served from an ephemeral `http://127.0.0.1:<port>/` origin.
+* `installDirectory`, `cefArguments`, and `configureCef` were removed. The platform webview uses the system runtime (WebView2 on Windows).
+* `Window.browser()` returns a `io.avaje.webview.Webview` and is `null` until the window is shown.
+* `Window.frame()` was removed because the main window is no longer a `JFrame`. Use `Window.browser()` for the native webview.
+* `Window.openDevTools()` no longer opens the tools programmatically. Enable them with `devTools(true)` (or `--devtools`) and use `F12` or the context menu.
 
 ## Window State
 
@@ -278,7 +285,7 @@ main.id("main")
     .show();
 ```
 
-The position, size, and maximized state are written to `window-state.json` in the Chromium user data directory. Move and resize events are coalesced, and the state is flushed when the window closes or the application quits.
+The position, size, and maximized state are written to `window-state.json` in the application data directory. The native window bounds are sampled every 300 ms and written after 500 ms without changes, and again when the window closes or the application quits.
 
 * The default ids are `main`, `window-2`, `window-3`, and so on. Set an explicit id when windows are created in a data-dependent order.
 * The values passed to `size()` / `bounds()` are used on the first run. On later runs the persisted state takes precedence.
@@ -300,7 +307,7 @@ Or from the renderer:
 await apocrypha.app.restart();
 ```
 
-The framework starts a new JVM with the same Java executable, JVM options, classpath or jar, working directory, and application arguments. The new process waits for the old one to exit before initializing Chromium, which releases the JCEF cache lock. `onExit()` runs in the old process, `onStart()` runs in the new process, and the saved window state is restored.
+The framework starts a new JVM with the same Java executable, JVM options, classpath or jar, working directory, and application arguments. The new process waits for the old one to exit before creating the webview, so the previous native window is released. `onExit()` runs in the old process, `onStart()` runs in the new process, and the saved window state is restored.
 
 Restart requires the application to be started through `Application.launch(...)`. The launcher class is discovered from `sun.java.command`; if that property is unavailable, the application class must declare a `main` method. Debug-agent options (`-agentlib:jdwp` / `-Xrunjdwp`) are omitted from the new process so a debug port does not conflict.
 
@@ -308,20 +315,24 @@ Restart requires the application to be started through `Application.launch(...)`
 
 * The renderer has no direct access to Java objects. It can only call registered IPC channels with JSON values.
 * IPC queries are accepted from the main frame only.
-* The application scheme is registered as secure and CORS-enabled, and only its configured host is served.
+* The frontend is served from an ephemeral HTTP server bound to `127.0.0.1`; requests with a foreign `Host` header are rejected.
 * Classpath resolution rejects absolute paths, traversal segments, NUL bytes, and backslashes.
 * External links opened with `target="_blank"` are handed to the operating system browser instead of creating an unrestricted popup.
 
 ## Notes
 
 * Java 25 or later is required.
-* Add `--enable-native-access=ALL-UNNAMED` to the JVM options to avoid restricted native access warnings from JCEF.
-* The JCEF native bundle is downloaded on the first run if `jcef-bundle` does not exist.
-* Each window owns its own `CefClient` and message router.
+* Add `--enable-native-access=ALL-UNNAMED` to the JVM options to avoid restricted native access warnings from the native webview (FFM).
+* avaje-webview bundles the native webview libraries for the supported platforms.
+* The build currently includes only the avaje-webview Windows x86_64 native artifact.
+* Windows requires the Microsoft Edge WebView2 runtime (preinstalled on Windows 10/11). Linux requires WebKitGTK.
+* The main window is a native avaje-webview window. On macOS, launch with `-XstartOnFirstThread`.
+* The Windows-specific window helpers provide position, bounds, always-on-top, resizability, and hide/show. Other platforms use avaje-webview's window API and may not support every operation.
+* Each window owns its own native webview instance.
 * The `apocrypha:` IPC namespace is reserved by the framework.
 * External `target=_blank` links are opened in the system browser.
 * Window state is stored under `<dataDirectory>/window-state.json`.
-* The repository contains a demo application at `apocrypha.Main`. Pass `--devtools` to open Chromium developer tools on startup.
+* The repository contains a demo application at `apocrypha.Main`. Pass `--devtools` to enable the webview developer tools on startup.
 <p align="right"><a href="#top">back to top</a></p>
 
 
@@ -419,12 +430,9 @@ Apocrypha depends on the following products on runtime.
 * [commons-io-2.20.0](https://mvnrepository.com/artifact/commons-io/commons-io/2.20.0)
 * [commons-lang3-3.18.0](https://mvnrepository.com/artifact/org.apache.commons/commons-lang3/3.18.0)
 * [error_prone_annotations-2.27.0](https://mvnrepository.com/artifact/com.google.errorprone/error_prone_annotations/2.27.0)
+* [avaje-webview-0.19](https://mvnrepository.com/artifact/io.avaje.webview/avaje-webview/0.19)
+* [avaje-webview-windows-x86_64-0.19](https://mvnrepository.com/artifact/io.avaje.webview/avaje-webview-windows-x86_64/0.19)
 * [flatlaf-3.7.2](https://mvnrepository.com/artifact/com.formdev/flatlaf/3.7.2)
-* [gluegen-rt-v2.4.0](https://mvnrepository.com/artifact/me.friwi/gluegen-rt/v2.4.0)
-* [gson-2.11.0](https://mvnrepository.com/artifact/com.google.code.gson/gson/2.11.0)
-* [jcef-api-jcef-17e805a+cef-152.0.6+g708dc14+chromium-152.0.7977.83](https://mvnrepository.com/artifact/me.friwi/jcef-api/jcef-17e805a+cef-152.0.6+g708dc14+chromium-152.0.7977.83)
-* [jcefmaven-152.0.6](https://mvnrepository.com/artifact/me.friwi/jcefmaven/152.0.6)
-* [jogl-all-v2.4.0](https://mvnrepository.com/artifact/me.friwi/jogl-all/v2.4.0)
 * [psychopath-2.3.0](https://mvnrepository.com/artifact/io.github.teletha/psychopath/2.3.0)
 * [sinobu-4.14.0](https://mvnrepository.com/artifact/io.github.teletha/sinobu/4.14.0)
 * [stylist-1.16.1](https://mvnrepository.com/artifact/io.github.teletha/stylist/1.16.1)

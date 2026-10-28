@@ -94,8 +94,8 @@ final class WindowStateStore {
                 }
             }
         } catch (Exception error) {
-            Application.logger.log(System.Logger.Level.WARNING,
-                    "Failed to read window state: " + file + " (starting with defaults)", error);
+            I.warn("apocrypha",
+                    new RuntimeException("Failed to read window state: " + file + " (starting with defaults)", error));
             states.clear();
         }
     }
@@ -122,7 +122,7 @@ final class WindowStateStore {
                 Files.move(temporary, file, StandardCopyOption.REPLACE_EXISTING);
             }
         } catch (IOException error) {
-            Application.logger.log(System.Logger.Level.WARNING, "Failed to save window state: " + file, error);
+            I.warn("apocrypha", new RuntimeException("Failed to save window state: " + file, error));
         }
     }
 

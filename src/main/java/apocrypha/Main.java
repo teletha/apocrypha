@@ -11,6 +11,8 @@ package apocrypha;
 
 import apocrypha.demo.DemoHandlers;
 
+import kiss.I;
+
 /**
  * A small demonstration application. It also serves as the executable entry point for the project.
  */
@@ -27,11 +29,7 @@ public class Main extends Application {
 
     @Override
     protected void configure(ApplicationConfig config) {
-        config.name("Apocrypha")
-                .version(FRAMEWORK_VERSION)
-                .resourceRoot("demo")
-                .entry("index.html")
-                .spaFallback(true);
+        config.name("Apocrypha").version(FRAMEWORK_VERSION).resourceRoot("demo").entry("index.html").spaFallback(true);
     }
 
     @Override
@@ -39,18 +37,18 @@ public class Main extends Application {
         ipc().register(new DemoHandlers());
 
         ipc().on("demo:log", payload -> {
-            logger.log(System.Logger.Level.INFO, "[renderer] " + payload);
+            I.info("apocrypha", "[renderer] " + payload);
             ipc().emit("demo:logged", java.util.Map.of("text", payload.text("text")));
         });
 
         Window window = createWindow();
         window.id("main").title("Apocrypha").size(1180, 780).show();
-        window.emit("demo:server", java.util.Map.of("message", "The Java event channel is live.",
-                "timestamp", java.time.Instant.now().toString()));
+        window.emit("demo:server", java.util.Map
+                .of("message", "The Java event channel is live.", "timestamp", java.time.Instant.now().toString()));
     }
 
     @Override
     protected void onExit() {
-        logger.log(System.Logger.Level.INFO, "The demo application is exiting.");
+        I.info("apocrypha", "The demo application is exiting.");
     }
 }

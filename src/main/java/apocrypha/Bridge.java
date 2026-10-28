@@ -40,10 +40,10 @@ final class Bridge {
 
     private final String script;
 
-    Bridge(ApplicationConfig config, String cefVersion) {
+    Bridge(ApplicationConfig config, String webviewVersion) {
         Meta meta = new Meta(Application.FRAMEWORK_VERSION, config.name(), config.version(),
                 System.getProperty("os.name", "unknown"), System.getProperty("os.arch", "unknown"),
-                System.getProperty("java.version", "unknown"), cefVersion == null ? "unknown" : cefVersion);
+                System.getProperty("java.version", "unknown"), webviewVersion == null ? "unknown" : webviewVersion);
 
         String source = read();
         if (!source.contains(MARKER)) {
@@ -114,6 +114,6 @@ final class Bridge {
     }
 
     private record Meta(String frameworkVersion, String name, String version, String platform, String arch, String java,
-            String cef) {
+            String webview) {
     }
 }

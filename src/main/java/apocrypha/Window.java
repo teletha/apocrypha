@@ -9,130 +9,105 @@
  */
 package apocrypha;
 
-import java.awt.Desktop;
 import java.awt.Dimension;
 import java.awt.GraphicsDevice;
 import java.awt.GraphicsEnvironment;
 import java.awt.Rectangle;
-import java.awt.event.ComponentAdapter;
-import java.awt.event.ComponentEvent;
-import java.awt.event.WindowAdapter;
-import java.awt.event.WindowEvent;
-import java.net.URI;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Supplier;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
-import javax.swing.JFrame;
-import javax.swing.SwingUtilities;
-import javax.swing.WindowConstants;
+import apocrypha.webview.Win32;
 
-import org.cef.CefClient;
-import org.cef.CefSettings;
-import org.cef.browser.CefBrowser;
-import org.cef.browser.CefFrame;
-import org.cef.browser.CefMessageRouter;
-import org.cef.callback.CefQueryCallback;
-import org.cef.handler.CefDisplayHandlerAdapter;
-import org.cef.handler.CefLifeSpanHandlerAdapter;
-import org.cef.handler.CefLoadHandler;
-import org.cef.handler.CefLoadHandlerAdapter;
-import org.cef.handler.CefMessageRouterHandlerAdapter;
-import org.cef.handler.CefRequestHandlerAdapter;
-import org.cef.handler.CefResourceHandler;
-import org.cef.handler.CefResourceRequestHandler;
-import org.cef.handler.CefResourceRequestHandlerAdapter;
-import org.cef.misc.BoolRef;
-import org.cef.network.CefRequest;
+import io.avaje.webview.Webview;
 
 import kiss.I;
 
 /**
- * A native window which hosts a Chromium browser.
+ * A native application window which hosts an avaje-webview browser.
  * <p>
- * Create windows from {@link Application#onStart()} with {@link Application#createWindow()}. All
- * methods may be called from any thread.
+ * avaje-webview creates and owns the top-level native window. The framework manages its bounds,
+ * visibility, and state, and runs the webview event loop on a dedicated thread. Create windows from
+ * {@link Application#onStart()} with {@link Application#createWindow()}. All methods may be called
+ * from any thread.
  */
 public final class Window {
 
+    private static final boolean WINDOWS = System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win");
+
+    private static final int DEFAULT_WIDTH = 1100;
+
+    private static final int DEFAULT_HEIGHT = 760;
+
+    private static final int MIN_WIDTH = 320;
+
+    private static final int MIN_HEIGHT = 240;
+
+    private static final long STATE_POLL_MILLIS = 300;
+
+    private static final long STATE_SAVE_DELAY_NANOS = 500_000_000L;
+
     private final Application application;
-
-    private final JFrame frame;
-
-    private final CefClient client;
-
-    private final CefMessageRouter router;
-
-    private final CefBrowser browser;
 
     private final Queue<Event> pending = new ConcurrentLinkedQueue<>();
 
+    private final Queue<String> pendingScripts = new ConcurrentLinkedQueue<>();
+
     private final List<Runnable> closeListeners = new CopyOnWriteArrayList<>();
+
+    private final Rectangle normalBounds = new Rectangle(0, 0, DEFAULT_WIDTH, DEFAULT_HEIGHT);
+
+    private final CountDownLatch stopped = new CountDownLatch(1);
+
+    private final AtomicBoolean cleaned = new AtomicBoolean();
+
+    private volatile Webview webview;
+
+    private volatile Thread thread;
+
+    private volatile String currentUrl;
+
+    private volatile String id;
+
+    private volatile String title;
+
+    private volatile boolean titleExplicit;
+
+    private volatile boolean restoreStateEnabled;
+
+
+    private volatile boolean maximized;
+
+    private volatile boolean resizable = true;
+
+    private volatile boolean alwaysOnTop;
 
     private volatile boolean loaded;
 
     private volatile boolean closed;
 
-    private volatile boolean titleExplicit;
+    private volatile boolean started;
 
-    private volatile boolean devToolsOpened;
+    private volatile boolean devToolsHinted;
 
-    private volatile String id;
-
-    private volatile boolean restoreStateEnabled;
-
-    private final Rectangle normalBounds = new Rectangle();
-
-    private volatile boolean maximized;
-
-    private boolean restored;
-
-    private boolean restoring;
+    private volatile boolean stateWatcherStarted;
 
     Window(Application application, String url, String id) {
         this.application = application;
         this.id = Objects.requireNonNull(id, "id");
+        this.currentUrl = url;
+        this.title = application.config().name();
         this.restoreStateEnabled = application.config().restoreWindowState();
-        this.frame = new JFrame(application.config().name());
-        this.frame.setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
-        this.frame.setMinimumSize(new Dimension(320, 240));
-        this.frame.setSize(new Dimension(1100, 760));
-        this.frame.setLocationRelativeTo(null);
-        this.normalBounds.setBounds(frame.getBounds());
 
-        this.client = application.cefApp().createClient();
-        this.router = CefMessageRouter.create();
-        this.router.addHandler(new Router(), true);
-        this.client.addMessageRouter(router);
-        this.client.addRequestHandler(new RequestHandler(application.resourceLoader()));
-        this.client.addDisplayHandler(new Display());
-        this.client.addLoadHandler(new Loader());
-        this.client.addLifeSpanHandler(new Lifespan());
-        this.browser = client.createBrowser(url, false, false);
-        this.frame.add(browser.getUIComponent());
-
-        this.frame.addComponentListener(new ComponentAdapter() {
-            @Override
-            public void componentMoved(ComponentEvent event) {
-                boundsChanged();
-            }
-
-            @Override
-            public void componentResized(ComponentEvent event) {
-                boundsChanged();
-            }
-        });
-        this.frame.addWindowStateListener(event -> stateChanged());
-        this.frame.addWindowListener(new WindowAdapter() {
-            @Override
-            public void windowClosing(WindowEvent event) {
-                close();
-            }
-        });
+        Rectangle screen = screenBounds();
+        this.normalBounds.setBounds(screen.x + (screen.width - DEFAULT_WIDTH) / 2,
+                screen.y + (screen.height - DEFAULT_HEIGHT) / 2, DEFAULT_WIDTH, DEFAULT_HEIGHT);
     }
 
     /**
@@ -143,9 +118,29 @@ public final class Window {
      */
     public Window title(String title) {
         Objects.requireNonNull(title, "title");
-        titleExplicit = true;
-        runOnEdt(() -> frame.setTitle(title));
+        this.title = title;
+        this.titleExplicit = true;
+        Webview browser = webview;
+        if (browser != null) {
+            browser.setTitle(title);
+        }
         return this;
+    }
+
+    /**
+     * Apply a title reported by the renderer. This is ignored after {@link #title(String)} has set
+     * an explicit title.
+     * 
+     * @param title A document title.
+     */
+    void documentTitle(String title) {
+        if (!titleExplicit && title != null && !title.isBlank()) {
+            this.title = title;
+            Webview browser = webview;
+            if (browser != null) {
+                browser.setTitle(title);
+            }
+        }
     }
 
     /**
@@ -201,11 +196,16 @@ public final class Window {
         if (width <= 0 || height <= 0) {
             throw new IllegalArgumentException("Window size must be positive");
         }
-        runOnEdt(() -> {
-            frame.setSize(width, height);
-            updateNormalBounds();
-            application.windowStateChanged();
-        });
+        synchronized (this) {
+            normalBounds.width = Math.max(width, MIN_WIDTH);
+            normalBounds.height = Math.max(height, MIN_HEIGHT);
+            long window = handle();
+            if (WINDOWS && window != 0) {
+                Win32.setBounds(window, normalBounds.x, normalBounds.y, normalBounds.width, normalBounds.height);
+            } else if (webview != null) {
+                webview.setSize(normalBounds.width, normalBounds.height);
+            }
+        }
         return this;
     }
 
@@ -215,7 +215,8 @@ public final class Window {
      * @return A size.
      */
     public Dimension size() {
-        return readOnEdt(frame::getSize);
+        Rectangle bounds = bounds();
+        return new Dimension(bounds.width, bounds.height);
     }
 
     /**
@@ -231,11 +232,13 @@ public final class Window {
         if (width <= 0 || height <= 0) {
             throw new IllegalArgumentException("Window size must be positive");
         }
-        runOnEdt(() -> {
-            frame.setBounds(x, y, width, height);
-            updateNormalBounds();
-            application.windowStateChanged();
-        });
+        synchronized (this) {
+            normalBounds.setBounds(x, y, Math.max(width, MIN_WIDTH), Math.max(height, MIN_HEIGHT));
+            long window = handle();
+            if (WINDOWS && window != 0) {
+                Win32.setBounds(window, normalBounds.x, normalBounds.y, normalBounds.width, normalBounds.height);
+            }
+        }
         return this;
     }
 
@@ -245,7 +248,16 @@ public final class Window {
      * @return A rectangle.
      */
     public Rectangle bounds() {
-        return readOnEdt(frame::getBounds);
+        long window = handle();
+        if (WINDOWS && window != 0) {
+            int[] rect = Win32.windowRect(window);
+            if (rect[2] > 0 && rect[3] > 0) {
+                return new Rectangle(rect[0], rect[1], rect[2], rect[3]);
+            }
+        }
+        synchronized (this) {
+            return new Rectangle(normalBounds);
+        }
     }
 
     /**
@@ -256,25 +268,34 @@ public final class Window {
      * @return This window.
      */
     public Window position(int x, int y) {
-        runOnEdt(() -> {
-            frame.setLocation(x, y);
-            updateNormalBounds();
-            application.windowStateChanged();
-        });
+        synchronized (this) {
+            normalBounds.x = x;
+            normalBounds.y = y;
+            long window = handle();
+            if (WINDOWS && window != 0) {
+                Win32.setBounds(window, x, y, normalBounds.width, normalBounds.height);
+            }
+        }
         return this;
     }
 
     /**
-     * Center the window on the screen.
+     * Center the window on the primary screen.
      * 
      * @return This window.
      */
     public Window center() {
-        runOnEdt(() -> {
-            frame.setLocationRelativeTo(null);
-            updateNormalBounds();
-            application.windowStateChanged();
-        });
+        Rectangle screen = screenBounds();
+        synchronized (this) {
+            int width = Math.max(normalBounds.width, MIN_WIDTH);
+            int height = Math.max(normalBounds.height, MIN_HEIGHT);
+            normalBounds.setBounds(screen.x + (screen.width - width) / 2,
+                    screen.y + (screen.height - height) / 2, width, height);
+            long window = handle();
+            if (WINDOWS && window != 0) {
+                Win32.setBounds(window, normalBounds.x, normalBounds.y, normalBounds.width, normalBounds.height);
+            }
+        }
         return this;
     }
 
@@ -284,19 +305,26 @@ public final class Window {
      * @return This window.
      */
     public Window show() {
-        runOnEdt(() -> {
-            restoreWindowState();
-            if (maximized) {
-                frame.setExtendedState(frame.getExtendedState() | JFrame.MAXIMIZED_BOTH);
+        if (closed) {
+            return this;
+        }
+
+        synchronized (this) {
+            if (started) {
+                if (WINDOWS) {
+                    long window = handle();
+                    if (window != 0) {
+                        Win32.show(window);
+                    }
+                }
+                return this;
             }
-            frame.setVisible(true);
-            frame.toFront();
-            browser.setFocus(true);
-            if (maximized) {
-                frame.setExtendedState(frame.getExtendedState() | JFrame.MAXIMIZED_BOTH);
-            }
-            application.windowStateChanged();
-        });
+            started = true;
+            thread = new Thread(this::run, "apocrypha-window-" + id);
+            thread.setDaemon(true);
+        }
+
+        thread.start();
         return this;
     }
 
@@ -306,7 +334,12 @@ public final class Window {
      * @return This window.
      */
     public Window hide() {
-        runOnEdt(() -> frame.setVisible(false));
+        if (WINDOWS) {
+            long window = handle();
+            if (window != 0) {
+                Win32.hide(window);
+            }
+        }
         return this;
     }
 
@@ -316,7 +349,12 @@ public final class Window {
      * @return This window.
      */
     public Window minimize() {
-        runOnEdt(() -> frame.setExtendedState(frame.getExtendedState() | JFrame.ICONIFIED));
+        if (WINDOWS) {
+            long window = handle();
+            if (window != 0) {
+                Win32.minimize(window);
+            }
+        }
         return this;
     }
 
@@ -326,14 +364,21 @@ public final class Window {
      * @return This window.
      */
     public Window maximize() {
-        runOnEdt(() -> {
-            if ((frame.getExtendedState() & JFrame.MAXIMIZED_BOTH) != JFrame.MAXIMIZED_BOTH) {
-                updateNormalBounds();
+        synchronized (this) {
+            if (!maximized) {
+                captureBounds();
             }
             maximized = true;
-            frame.setExtendedState(JFrame.MAXIMIZED_BOTH);
-            application.windowStateChanged();
-        });
+        }
+        long window = handle();
+        if (WINDOWS && window != 0) {
+            Win32.maximize(window);
+        } else {
+            Webview browser = webview;
+            if (browser != null) {
+                browser.maximizeWindow();
+            }
+        }
         return this;
     }
 
@@ -343,16 +388,13 @@ public final class Window {
      * @return This window.
      */
     public Window unmaximize() {
-        runOnEdt(() -> {
-            maximized = false;
-            frame.setExtendedState(JFrame.NORMAL);
-            SwingUtilities.invokeLater(() -> {
-                if (!closed) {
-                    updateNormalBounds();
-                    application.windowStateChanged();
-                }
-            });
-        });
+        maximized = false;
+        if (WINDOWS) {
+            long window = handle();
+            if (window != 0) {
+                Win32.restore(window);
+            }
+        }
         return this;
     }
 
@@ -362,7 +404,13 @@ public final class Window {
      * @return True if maximized.
      */
     public boolean isMaximized() {
-        return readOnEdt(() -> (frame.getExtendedState() & JFrame.MAXIMIZED_BOTH) == JFrame.MAXIMIZED_BOTH);
+        if (WINDOWS) {
+            long window = handle();
+            if (window != 0) {
+                return Win32.isZoomed(window);
+            }
+        }
+        return maximized;
     }
 
     /**
@@ -372,7 +420,13 @@ public final class Window {
      * @return This window.
      */
     public Window setResizable(boolean resizable) {
-        runOnEdt(() -> frame.setResizable(resizable));
+        this.resizable = resizable;
+        if (WINDOWS) {
+            long window = handle();
+            if (window != 0) {
+                Win32.setResizable(window, resizable);
+            }
+        }
         return this;
     }
 
@@ -383,7 +437,13 @@ public final class Window {
      * @return This window.
      */
     public Window setAlwaysOnTop(boolean alwaysOnTop) {
-        runOnEdt(() -> frame.setAlwaysOnTop(alwaysOnTop));
+        this.alwaysOnTop = alwaysOnTop;
+        if (WINDOWS) {
+            long window = handle();
+            if (window != 0) {
+                Win32.setAlwaysOnTop(window, alwaysOnTop);
+            }
+        }
         return this;
     }
 
@@ -395,8 +455,9 @@ public final class Window {
      */
     public Window load(String url) {
         String target = resolve(url);
+        currentUrl = target;
         loaded = false;
-        runOnEdt(() -> browser.loadURL(target));
+        navigate(target);
         return this;
     }
 
@@ -407,31 +468,52 @@ public final class Window {
      */
     public Window reload() {
         loaded = false;
-        runOnEdt(browser::reload);
+        navigate(currentUrl);
         return this;
     }
 
     /**
-     * Open the Chromium developer tools.
+     * Open the webview developer tools.
+     * <p>
+     * The platform webview does not expose a programmatic developer-tools API. Enable them with
+     * {@link ApplicationConfig#devTools(boolean)} and use {@code F12} or the context menu.
      * 
      * @return This window.
      */
     public Window openDevTools() {
-        runOnEdt(browser::openDevTools);
+        if (!devToolsHinted) {
+            devToolsHinted = true;
+            if (application.config().devTools()) {
+                I.info("apocrypha",
+                        "Developer tools are enabled; press F12 or use the webview context menu.");
+            } else {
+                I.warn("apocrypha",
+                        "Developer tools are disabled; enable them with ApplicationConfig.devTools(true).");
+            }
+        }
         return this;
     }
 
     /**
-     * Execute JavaScript in the current document.
+     * Execute JavaScript in the current document. Scripts which are executed before the document has
+     * loaded are queued and run afterwards.
      * 
      * @param script A JavaScript expression.
      * @return This window.
      */
     public Window execute(String script) {
         Objects.requireNonNull(script, "script");
-        if (!closed) {
-            runOnEdt(() -> browser.executeJavaScript(script, "", 0));
+        if (closed) {
+            return this;
         }
+
+        Webview browser = webview;
+        if (browser == null || !loaded) {
+            pendingScripts.add(script);
+            return this;
+        }
+
+        browser.eval(script);
         return this;
     }
 
@@ -455,6 +537,9 @@ public final class Window {
             dispatch(message);
         } else {
             pending.add(message);
+            if (loaded) {
+                drainPending();
+            }
         }
         return this;
     }
@@ -475,7 +560,28 @@ public final class Window {
      * Close the window.
      */
     public void close() {
-        runOnEdt(this::dispose);
+        if (closed) {
+            return;
+        }
+        closed = true;
+        captureBounds();
+
+        Webview browser = webview;
+        if (browser != null) {
+            try {
+                browser.close();
+            } catch (Throwable error) {
+                I.debug("apocrypha", new RuntimeException("Failed to close the webview", error));
+            }
+            if (Thread.currentThread() != thread) {
+                try {
+                    stopped.await(2, TimeUnit.SECONDS);
+                } catch (InterruptedException error) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+        }
+        cleanup();
     }
 
     /**
@@ -488,21 +594,12 @@ public final class Window {
     }
 
     /**
-     * The native frame.
+     * The native webview. It is available once the window has been shown.
      * 
-     * @return A frame.
+     * @return A webview or {@code null}.
      */
-    public JFrame frame() {
-        return frame;
-    }
-
-    /**
-     * The native browser.
-     * 
-     * @return A browser.
-     */
-    public CefBrowser browser() {
-        return browser;
+    public Webview browser() {
+        return webview;
     }
 
     /**
@@ -514,45 +611,166 @@ public final class Window {
         return application;
     }
 
-    void dispose() {
+    private void run() {
+        try {
+            if (closed) {
+                return;
+            }
+            restoreWindowState();
+
+            Webview browser = Webview.builder()
+                    .title(title)
+                    .enableDeveloperTools(application.config().devTools())
+                    .width(Math.max(normalBounds.width, MIN_WIDTH))
+                    .height(Math.max(normalBounds.height, MIN_HEIGHT))
+                    .build();
+            webview = browser;
+            if (closed) {
+                browser.close();
+                return;
+            }
+
+            initialize(browser);
+
+            if (WINDOWS) {
+                long window = browser.nativeWindowPointer().address();
+                if (window != 0) {
+                    Win32.setBounds(window, normalBounds.x, normalBounds.y, normalBounds.width, normalBounds.height);
+                    if (alwaysOnTop) {
+                        Win32.setAlwaysOnTop(window, true);
+                    }
+                    if (!resizable) {
+                        Win32.setResizable(window, false);
+                    }
+                }
+            } else {
+                browser.setSize(normalBounds.width, normalBounds.height);
+            }
+
+            browser.run();
+        } catch (Throwable error) {
+            failed(error);
+        } finally {
+            stopped.countDown();
+            onWebviewStopped();
+        }
+    }
+
+    private void initialize(Webview browser) {
+        browser.bind("__apocryphaIpc", this::receive);
+        browser.bind("__apocryphaPageReady", arguments -> {
+            onPageReady();
+            return "null";
+        });
+        browser.setInitScript(application.bridgeScript());
+        browser.navigate(currentUrl);
+    }
+
+    private void failed(Throwable error) {
+        I.error("apocrypha", new RuntimeException("Failed to initialize the webview for window " + id, error));
+        application.quit();
+    }
+
+    private void onWebviewStopped() {
         if (closed) {
             return;
         }
+        closed = true;
+        cleanup();
+    }
 
-        boolean releaseCef = !application.willQuitOnClose(this);
+    private void cleanup() {
+        if (!cleaned.compareAndSet(false, true)) {
+            return;
+        }
+
         try {
             application.saveWindowStates();
         } catch (Throwable error) {
-            Application.logger.log(System.Logger.Level.WARNING, "Failed to save window state", error);
+            I.warn("apocrypha", new RuntimeException("Failed to save window state", error));
         }
 
-        closed = true;
         loaded = false;
         pending.clear();
+        pendingScripts.clear();
+        webview = null;
 
         for (Runnable listener : closeListeners) {
             try {
                 listener.run();
             } catch (Throwable error) {
-                Application.logger.log(System.Logger.Level.WARNING, "Window close listener failed", error);
+                I.warn("apocrypha", new RuntimeException("Window close listener failed", error));
             }
         }
         closeListeners.clear();
 
-        if (releaseCef) {
-            try {
-                router.dispose();
-            } catch (Throwable error) {
-                Application.logger.log(System.Logger.Level.DEBUG, "Failed to dispose the message router", error);
+        application.windowClosed(this);
+    }
+
+    @SuppressWarnings("unchecked")
+    private String receive(String json) {
+        if (closed) {
+            return null;
+        }
+        try {
+            List<?> values = I.json(json, List.class);
+            if (values == null || values.isEmpty()) {
+                return null;
             }
-            try {
-                client.dispose();
-            } catch (Throwable error) {
-                Application.logger.log(System.Logger.Level.DEBUG, "Failed to dispose the CEF client", error);
+
+            Request message = I.json(String.valueOf(values.get(0)), Request.class);
+            if (message.channel() == null || message.channel().isBlank()) {
+                I.warn("apocrypha", "Malformed IPC request: missing channel");
+                return null;
+            }
+
+            List<String> arguments = message.args() == null ? List.of() : message.args();
+            long id = message.id();
+            application.ipc().dispatch(this, message.channel(), arguments, id, response -> respond(id, response));
+        } catch (Throwable error) {
+            I.warn("apocrypha", new RuntimeException("Malformed IPC request", error));
+        }
+        return null;
+    }
+
+    private void respond(long id, String response) {
+        execute("window.__apocryphaResolve(" + id + "," + IpcCodec.write(response) + ");");
+    }
+
+    private void onPageReady() {
+        if (closed) {
+            return;
+        }
+        loaded = true;
+        if (maximized) {
+            long window = handle();
+            if (WINDOWS && window != 0) {
+                Win32.maximize(window);
+            } else {
+                Webview browser = webview;
+                if (browser != null) {
+                    browser.maximizeWindow();
+                }
             }
         }
-        frame.dispose();
-        application.windowClosed(this);
+        startStateWatcher();
+
+        String script;
+        while ((script = pendingScripts.poll()) != null) {
+            execute(script);
+        }
+        drainPending();
+
+        if (WINDOWS) {
+            Win32.focus(handle());
+        }
+    }
+
+    private void navigate(String target) {
+        Webview browser = webview;
+        if (browser != null && target != null && !closed) {
+            browser.navigate(target);
+        }
     }
 
     private void dispatch(Event event) {
@@ -561,15 +779,10 @@ public final class Window {
     }
 
     /**
-     * Apply the persisted bounds and maximized state. This is called once, immediately before the
-     * window becomes visible.
+     * Apply the persisted bounds and maximized state. This is called once, on the webview thread,
+     * before the native window is created.
      */
     private void restoreWindowState() {
-        if (restored) {
-            return;
-        }
-        restored = true;
-
         if (!restoreStateEnabled || !application.config().restoreWindowState()) {
             return;
         }
@@ -580,78 +793,117 @@ public final class Window {
         }
 
         Rectangle saved = state.bounds();
-        saved.width = Math.max(saved.width, frame.getMinimumSize().width);
-        saved.height = Math.max(saved.height, frame.getMinimumSize().height);
+        saved.width = Math.max(saved.width, MIN_WIDTH);
+        saved.height = Math.max(saved.height, MIN_HEIGHT);
 
         if (isVisibleOnScreen(saved)) {
-            restoring = true;
-            try {
-                frame.setBounds(saved);
-                normalBounds.setBounds(saved);
-                maximized = state.maximized;
-            } finally {
-                restoring = false;
-            }
-        } else if (state.maximized) {
-            // The saved monitor is gone, but a maximized window is still useful on the primary
-            // screen. Keep the default bounds and maximize them.
-            maximized = true;
+            normalBounds.setBounds(saved);
         }
-    }
-
-    private void updateNormalBounds() {
-        if (restoring) {
-            return;
-        }
-        int state = frame.getExtendedState();
-        if ((state & (JFrame.MAXIMIZED_BOTH | JFrame.ICONIFIED)) == 0) {
-            Rectangle bounds = frame.getBounds();
-            if (bounds.width > 0 && bounds.height > 0) {
-                normalBounds.setBounds(bounds);
-            }
-        }
-    }
-
-    private void boundsChanged() {
-        if (closed || restoring) {
-            return;
-        }
-        updateNormalBounds();
-        application.windowStateChanged();
-    }
-
-    private void stateChanged() {
-        if (closed || restoring) {
-            return;
-        }
-
-        int state = frame.getExtendedState();
-        if ((state & JFrame.ICONIFIED) == 0) {
-            boolean nowMaximized = (state & JFrame.MAXIMIZED_BOTH) == JFrame.MAXIMIZED_BOTH;
-            if (!nowMaximized && !maximized) {
-                updateNormalBounds();
-            }
-            maximized = nowMaximized;
-        }
-        application.windowStateChanged();
+        maximized = state.maximized;
     }
 
     /**
-     * The current persisted state. The normal bounds are used while maximized or minimized so that
-     * restoring the window returns it to its previous size.
+     * Read the native window bounds into the cached state. The native X button destroys the window
+     * before {@link Webview#run()} returns, so a small watcher keeps the state current while the
+     * window is open.
+     */
+    private boolean captureBounds() {
+        if (!WINDOWS) {
+            return false;
+        }
+
+        long window = handle();
+        if (window == 0) {
+            return false;
+        }
+        if (!Win32.isVisible(window)) {
+            return false;
+        }
+
+        int[] rect = Win32.windowRect(window);
+        if (rect[2] <= 0 || rect[3] <= 0) {
+            return false;
+        }
+
+        boolean zoomed = Win32.isZoomed(window);
+        boolean iconic = Win32.isIconic(window);
+        boolean changed = false;
+        synchronized (this) {
+            if (!iconic) {
+                if (!zoomed && (normalBounds.x != rect[0] || normalBounds.y != rect[1]
+                        || normalBounds.width != rect[2] || normalBounds.height != rect[3])) {
+                    normalBounds.setBounds(rect[0], rect[1], rect[2], rect[3]);
+                    changed = true;
+                }
+                if (maximized != zoomed) {
+                    maximized = zoomed;
+                    changed = true;
+                }
+            }
+        }
+        return changed;
+    }
+
+    private synchronized void startStateWatcher() {
+        if (!WINDOWS || stateWatcherStarted) {
+            return;
+        }
+        stateWatcherStarted = true;
+
+        Thread watcher = new Thread(() -> {
+            long changedAt = 0;
+            while (!closed) {
+                try {
+                    if (captureBounds()) {
+                        changedAt = System.nanoTime();
+                    }
+                    if (changedAt != 0 && System.nanoTime() - changedAt >= STATE_SAVE_DELAY_NANOS) {
+                        changedAt = 0;
+                        application.saveWindowStates();
+                    }
+                } catch (Throwable error) {
+                    I.debug("apocrypha", new RuntimeException("Failed to capture the window state", error));
+                }
+                try {
+                    Thread.sleep(STATE_POLL_MILLIS);
+                } catch (InterruptedException error) {
+                    return;
+                }
+            }
+        }, "apocrypha-window-state-" + id);
+        watcher.setDaemon(true);
+        watcher.start();
+    }
+
+    private long handle() {
+        Webview browser = webview;
+        return browser == null ? 0 : browser.nativeWindowPointer().address();
+    }
+
+    /**
+     * The current persisted state. The cached normal bounds are used while maximized or minimized so
+     * that restoring the window returns it to its previous size.
      * 
      * @return A state or {@code null}.
      */
     WindowStateStore.State windowState() {
-        return readOnEdt(() -> {
-            int state = frame.getExtendedState();
-            Rectangle bounds = maximized || (state & JFrame.ICONIFIED) != 0 ? new Rectangle(normalBounds)
-                    : frame.getBounds();
+        captureBounds();
+        synchronized (this) {
+            Rectangle bounds = new Rectangle(normalBounds);
             if (bounds.width <= 0 || bounds.height <= 0) {
                 return null;
             }
             return new WindowStateStore.State(bounds.x, bounds.y, bounds.width, bounds.height, maximized);
-        });
+        }
+    }
+
+    private static Rectangle screenBounds() {
+        try {
+            GraphicsDevice device = GraphicsEnvironment.getLocalGraphicsEnvironment().getDefaultScreenDevice();
+            return device.getDefaultConfiguration().getBounds();
+        } catch (Throwable error) {
+            return new Rectangle(0, 0, 1920, 1080);
+        }
     }
 
     private static boolean isVisibleOnScreen(Rectangle bounds) {
@@ -682,195 +934,14 @@ public final class Window {
         return url.contains("://") ? url : application.config().url(url);
     }
 
-    private void openExternal(String url) {
-        if (url == null || url.isBlank()) {
-            return;
-        }
-        try {
-            URI uri = URI.create(url);
-            String scheme = uri.getScheme();
-            if (!"http".equalsIgnoreCase(scheme) && !"https".equalsIgnoreCase(scheme) && !"mailto".equalsIgnoreCase(scheme)) {
-                return;
-            }
-            Thread.startVirtualThread(() -> {
-                try {
-                    if (Desktop.isDesktopSupported()) {
-                        Desktop.getDesktop().browse(uri);
-                    }
-                } catch (Throwable error) {
-                    Application.logger.log(System.Logger.Level.WARNING, "Failed to open external URL: " + url, error);
-                }
-            });
-        } catch (RuntimeException error) {
-            Application.logger.log(System.Logger.Level.WARNING, "Invalid external URL: " + url, error);
-        }
-    }
-
-    private void runOnEdt(Runnable action) {
-        if (SwingUtilities.isEventDispatchThread()) {
-            action.run();
-        } else {
-            SwingUtilities.invokeLater(action);
-        }
-    }
-
-    private <T> T readOnEdt(Supplier<T> supplier) {
-        if (SwingUtilities.isEventDispatchThread()) {
-            return supplier.get();
-        }
-
-        AtomicReference<T> value = new AtomicReference<>();
-        AtomicReference<RuntimeException> failure = new AtomicReference<>();
-        try {
-            SwingUtilities.invokeAndWait(() -> {
-                try {
-                    value.set(supplier.get());
-                } catch (RuntimeException error) {
-                    failure.set(error);
-                }
-            });
-        } catch (InterruptedException error) {
-            Thread.currentThread().interrupt();
-            throw new IllegalStateException("Interrupted while waiting for the window", error);
-        } catch (java.lang.reflect.InvocationTargetException error) {
-            throw new IllegalStateException("Failed to read the window state", error.getCause());
-        }
-
-        if (failure.get() != null) {
-            throw failure.get();
-        }
-        return value.get();
-    }
-
     private record Event(String name, String payload) {
     }
 
     private record Request(long id, String channel, List<String> args) {
     }
 
-    private final class Router extends CefMessageRouterHandlerAdapter {
-
-        @Override
-        public boolean onQuery(CefBrowser target, CefFrame frame, long queryId, String request, boolean persistent,
-                CefQueryCallback callback) {
-            if (frame != null && !frame.isMain()) {
-                callback.failure(-1, "IPC is only available in the main frame");
-                return true;
-            }
-
-            try {
-                Request message = I.json(request, Request.class);
-                if (message.channel() == null || message.channel().isBlank()) {
-                    callback.failure(-1, "Malformed IPC request: missing channel");
-                    return true;
-                }
-                List<String> arguments = message.args() == null ? List.of() : message.args();
-                long id = message.id() == 0 ? queryId : message.id();
-                application.ipc().dispatch(Window.this, message.channel(), arguments, id, callback);
-            } catch (RuntimeException error) {
-                callback.failure(-1, "Malformed IPC request");
-            }
-            return true;
-        }
-    }
-
-    private static final class RequestHandler extends CefRequestHandlerAdapter {
-
-        private final ResourceLoader loader;
-
-        private final CefResourceRequestHandler resources = new CefResourceRequestHandlerAdapter() {
-            @Override
-            public CefResourceHandler getResourceHandler(CefBrowser browser, CefFrame frame, CefRequest request) {
-                return loader.handles(request.getURL()) ? new AppResourceHandler(loader) : null;
-            }
-        };
-
-        private RequestHandler(ResourceLoader loader) {
-            this.loader = loader;
-        }
-
-        @Override
-        public CefResourceRequestHandler getResourceRequestHandler(CefBrowser browser, CefFrame frame, CefRequest request,
-                boolean isNavigation, boolean isDownload, String requestInitiator, BoolRef disableDefaultHandling) {
-            if (loader.handles(request.getURL())) {
-                disableDefaultHandling.set(true);
-                return resources;
-            }
-            return null;
-        }
-    }
-
-    private final class Display extends CefDisplayHandlerAdapter {
-
-        @Override
-        public void onTitleChange(CefBrowser target, String title) {
-            if (!titleExplicit && title != null && !title.isBlank()) {
-                runOnEdt(() -> frame.setTitle(title));
-            }
-        }
-
-        @Override
-        public boolean onConsoleMessage(CefBrowser target, CefSettings.LogSeverity level, String message, String source,
-                int line) {
-            System.Logger.Level severity = switch (level) {
-            case LOGSEVERITY_ERROR, LOGSEVERITY_FATAL -> System.Logger.Level.ERROR;
-            case LOGSEVERITY_WARNING -> System.Logger.Level.WARNING;
-            default -> System.Logger.Level.DEBUG;
-            };
-            Application.logger.log(severity, "[renderer] " + message + " (" + source + ":" + line + ")");
-            return false;
-        }
-    }
-
-    private final class Loader extends CefLoadHandlerAdapter {
-
-        @Override
-        public void onLoadStart(CefBrowser target, CefFrame frame, CefRequest.TransitionType transitionType) {
-            if (frame != null && frame.isMain()) {
-                loaded = false;
-            }
-        }
-
-        @Override
-        public void onLoadEnd(CefBrowser target, CefFrame frame, int httpStatusCode) {
-            if (frame == null || !frame.isMain()) {
-                return;
-            }
-
-            String url = browser.getURL();
-            if (url != null && !url.startsWith(application.config().baseUrl())) {
-                browser.executeJavaScript(application.bridgeScript(), "", 0);
-            }
-
-            loaded = true;
-            drainPending();
-
-            if (application.config().devTools() && !devToolsOpened) {
-                devToolsOpened = true;
-                browser.openDevTools();
-            }
-        }
-
-        @Override
-        public void onLoadError(CefBrowser target, CefFrame frame, CefLoadHandler.ErrorCode errorCode, String errorText,
-                String failedUrl) {
-            if (frame != null && frame.isMain()) {
-                Application.logger.log(System.Logger.Level.WARNING,
-                        "Failed to load " + failedUrl + ": " + errorCode + " (" + errorText + ")");
-            }
-        }
-    }
-
-    private final class Lifespan extends CefLifeSpanHandlerAdapter {
-
-        @Override
-        public boolean onBeforePopup(CefBrowser target, CefFrame frame, String targetUrl, String targetFrameName) {
-            if (targetUrl != null && targetUrl.startsWith(application.config().baseUrl())) {
-                load(targetUrl);
-            } else {
-                openExternal(targetUrl);
-            }
-            return true;
-        }
+    @Override
+    public String toString() {
+        return "Window [id=" + id + ", url=" + currentUrl + ", closed=" + closed + "]";
     }
 }

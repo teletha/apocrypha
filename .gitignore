@@ -294,5 +294,7 @@ $RECYCLE.BIN/
 # End of https://www.toptal.com/developers/gitignore/api/Java,Maven,Windows,Linux
 
 ### Apocrypha ###
-jcef-bundle/
 
+
+# Leftover native bundle from the previous JCEF backend.
+jcef-bundle/

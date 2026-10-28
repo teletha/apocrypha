@@ -17,7 +17,6 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
-import org.cef.callback.CefQueryCallback;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -119,32 +118,20 @@ class IpcTest {
     private static class TestApplication extends Application {
     }
 
-    private static class Callback implements CefQueryCallback {
+    private static class Callback implements java.util.function.Consumer<String> {
 
         private final CountDownLatch latch = new CountDownLatch(1);
 
         private volatile String response;
 
-        private volatile int code;
-
-        private volatile String message;
-
         @Override
-        public void success(String response) {
+        public void accept(String response) {
             this.response = response;
             latch.countDown();
         }
 
-        @Override
-        public void failure(int code, String message) {
-            this.code = code;
-            this.message = message;
-            latch.countDown();
-        }
-
         private JSON response() {
-            assertNull(message, "Transport failure: " + message);
-            assertEquals(0, code);
+            assertNotNull(response, "No IPC response was delivered");
             return I.json(response);
         }
     }

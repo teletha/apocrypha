@@ -30,15 +30,15 @@
         <section class="hero">
             <div>
                 <p class="eyebrow">Electron-style desktop applications for Java</p>
-                <h1>Java backend.<br><span>Chromium frontend.</span></h1>
+                <h1>Java backend.<br><span>Native webview frontend.</span></h1>
                 <p class="lede">
-                    The window you are looking at is a native JFrame. The page is Chromium through JCEF.
-                    Everything between them is a small asynchronous IPC bridge.
+                    The window you are looking at is a native webview window. The page is rendered by the
+                    platform webview through avaje-webview. Everything between them is a small asynchronous IPC bridge.
                 </p>
             </div>
             <div class="metrics">
                 <div><strong id="metric-java">&#8212;</strong><span>Java</span></div>
-                <div><strong id="metric-cef">&#8212;</strong><span>Chromium</span></div>
+                <div><strong id="metric-webview">&#8212;</strong><span>WebView</span></div>
                 <div><strong id="metric-platform">&#8212;</strong><span>Platform</span></div>
             </div>
         </section>
@@ -51,7 +51,7 @@
                 </header>
                 <p>Call a Java handler and await its JSON result.</p>
                 <form id="greet-form" class="inline-form">
-                    <input id="greet-name" value="JCEF" autocomplete="off" spellcheck="false" aria-label="Name">
+                    <input id="greet-name" value="WebView" autocomplete="off" spellcheck="false" aria-label="Name">
                     <button type="submit">Greet</button>
                 </form>
                 <pre id="greet-result" class="output">Waiting for the backend...</pre>
@@ -128,7 +128,7 @@
     <footer>
         <span>HTML / CSS / JavaScript</span>
         <span class="dot"></span>
-        <span>JCEF</span>
+        <span>WebView</span>
         <span class="dot"></span>
         <span>Java</span>
     </footer>

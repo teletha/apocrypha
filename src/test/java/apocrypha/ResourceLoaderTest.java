@@ -25,23 +25,13 @@ class ResourceLoaderTest {
     @BeforeEach
     void setup() {
         config = new ApplicationConfig().name("Fixture").version("2.0").resourceRoot("fixture");
-        Bridge bridge = new Bridge(config, "152.0.0.0");
+        Bridge bridge = new Bridge(config, "0.12.0");
         loader = new ResourceLoader(config, bridge);
     }
 
     @Test
-    void handlesApplicationUrl() {
-        assertTrue(loader.handles("apocrypha://app/index.html"));
-        assertTrue(loader.handles("apocrypha://app/notes/2026"));
-        assertFalse(loader.handles("https://example.com/"));
-        assertFalse(loader.handles("apocrypha://other/index.html"));
-        assertFalse(loader.handles(null));
-        assertFalse(loader.handles("not a url"));
-    }
-
-    @Test
     void index() {
-        Resource resource = loader.load("apocrypha://app/");
+        Resource resource = loader.load("/");
 
         assertEquals(200, resource.status());
         assertEquals("text/html; charset=utf-8", resource.mimeType());
@@ -53,14 +43,14 @@ class ResourceLoaderTest {
 
     @Test
     void directory() {
-        Resource resource = loader.load("apocrypha://app/nested/");
+        Resource resource = loader.load("/nested/");
         assertEquals(200, resource.status());
         assertTrue(text(resource).contains("Nested index"));
     }
 
     @Test
     void asset() {
-        Resource resource = loader.load("apocrypha://app/app.js");
+        Resource resource = loader.load("/app.js");
         assertEquals(200, resource.status());
         assertEquals("text/javascript; charset=utf-8", resource.mimeType());
         assertTrue(text(resource).contains("console.log"));
@@ -68,18 +58,19 @@ class ResourceLoaderTest {
 
     @Test
     void bridge() {
-        Resource resource = loader.load("apocrypha://app/__apocrypha/bridge.js");
+        Resource resource = loader.load("/__apocrypha/bridge.js");
         assertEquals(200, resource.status());
         assertEquals("text/javascript; charset=utf-8", resource.mimeType());
         String script = text(resource);
         assertTrue(script.contains("window.apocrypha"));
         assertTrue(script.contains("\"name\": \"Fixture\""));
+        assertTrue(script.contains("\"webview\": \"0.12.0\""));
         assertFalse(script.contains("__APOCRYPHA_META__"));
     }
 
     @Test
     void spaFallback() {
-        Resource resource = loader.load("apocrypha://app/notes/2026");
+        Resource resource = loader.load("/notes/2026");
         assertEquals(200, resource.status());
         String html = text(resource);
         assertTrue(html.contains("<base href=\"/\">"));
@@ -88,28 +79,27 @@ class ResourceLoaderTest {
 
     @Test
     void missingAssetDoesNotFallBack() {
-        Resource resource = loader.load("apocrypha://app/missing.js");
+        Resource resource = loader.load("/missing.js");
         assertEquals(404, resource.status());
         assertTrue(text(resource).contains("Resource not found"));
     }
 
     @Test
     void traversal() {
-        assertEquals(404, loader.load("apocrypha://app/%2e%2e/secret.txt").status());
-        assertEquals(404, loader.load("apocrypha://app/%2e%2e%2fsecret.txt").status());
-        assertEquals(404, loader.load("apocrypha://app/..%5csecret.txt").status());
+        assertEquals(404, loader.load("/../secret.txt").status());
+        assertEquals(404, loader.load("/..\\secret.txt").status());
+        assertEquals(404, loader.load("/nested/../../secret.txt").status());
     }
 
     @Test
-    void wrongOrigin() {
-        assertEquals(404, loader.load("https://app/index.html").status());
-        assertEquals(404, loader.load("apocrypha://other/index.html").status());
+    void reservedNamespace() {
+        assertEquals(404, loader.load("/__apocrypha/missing.js").status());
     }
 
     @Test
     void fallbackDisabled() {
         config.spaFallback(false);
-        assertEquals(404, loader.load("apocrypha://app/notes/2026").status());
+        assertEquals(404, loader.load("/notes/2026").status());
     }
 
     @Test

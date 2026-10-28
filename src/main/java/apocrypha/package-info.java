@@ -12,8 +12,8 @@
  * Apocrypha is an Electron-style desktop application framework for Java.
  * <p>
  * The Java side owns the application lifecycle, native windows, and the IPC handlers. The user
- * interface is a standard web application rendered by Chromium through JCEF. A small preload bridge
- * exposes {@code window.apocrypha} to the renderer:
+ * interface is a standard web application rendered by the platform webview through avaje-webview. A
+ * small preload bridge exposes {@code window.apocrypha} to the renderer:
  *
  * <pre>{@code
  * const message = await apocrypha.invoke('notes:save', 'Hello');
@@ -21,8 +21,8 @@
  * }</pre>
  *
  * The entry point is {@link apocrypha.Application}. Frontend files are served from the classpath
- * through the {@code apocrypha://} scheme, so the same static build works in development and in a
- * packaged jar. IPC payloads may be Java model classes; they are mapped to JSON by Sinobu and can be
+ * through a loopback HTTP server, so the same static build works in development and in a packaged
+ * jar. IPC payloads may be Java model classes; they are mapped to JSON by Sinobu and can be
  * registered with {@link apocrypha.IpcChannel} annotations.
  */
 package apocrypha;

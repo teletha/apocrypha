@@ -10,7 +10,7 @@
 package apocrypha;
 
 /**
- * A response served through the application scheme.
+ * A response served by the application server.
  *
  * @param status An HTTP status code.
  * @param mimeType A content type.

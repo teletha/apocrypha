@@ -31,12 +31,25 @@
     }
 
     /**
+     * The function which the Java side binds to the webview.
+     */
+    function transport() {
+        return typeof window.__apocryphaIpc === 'function' ? window.__apocryphaIpc : null;
+    }
+
+    /**
      * Invoke a Java IPC channel. The returned promise resolves with the JSON result.
      */
     function invoke(channel) {
         var args = Array.prototype.slice.call(arguments, 1);
         return new Promise(function (resolve, reject) {
-            if (typeof window.cefQuery !== 'function') {
+            if (typeof channel !== 'string' || channel.length === 0) {
+                reject(new TypeError('The IPC channel name must be a non-empty string.'));
+                return;
+            }
+
+            var ipc = transport();
+            if (!ipc) {
                 reject(new Error('The Apocrypha bridge is not connected to the Java backend.'));
                 return;
             }
@@ -45,45 +58,48 @@
             pending.set(id, { resolve: resolve, reject: reject });
 
             try {
-                window.cefQuery({
-                    request: JSON.stringify({
-                        id: id,
-                        channel: channel,
-                        args: args.map(function (value) {
-                            var encoded = JSON.stringify(value === undefined ? null : value);
-                            return encoded === undefined ? 'null' : encoded;
-                        })
-                    }),
-                    persistent: false,
-                    onSuccess: function (response) {
-                        pending.delete(id);
-                        var message;
-                        try {
-                            message = JSON.parse(response);
-                        } catch (error) {
-                            reject(new Error('The Java backend returned an invalid IPC response.'));
-                            return;
-                        }
-                        if (message && message.ok) {
-                            resolve(message.result);
-                        } else {
-                            reject(errorFrom(message && message.error));
-                        }
-                    },
-                    onFailure: function (code, message) {
-                        pending.delete(id);
-                        reject(errorFrom({
-                            code: code === undefined ? 'EIPC' : 'EIPC:' + code,
-                            message: message || 'The IPC transport failed.'
-                        }));
-                    }
-                });
+                ipc(JSON.stringify({
+                    id: id,
+                    channel: channel,
+                    args: args.map(function (value) {
+                        var encoded = JSON.stringify(value === undefined ? null : value);
+                        return encoded === undefined ? 'null' : encoded;
+                    })
+                }));
             } catch (error) {
                 pending.delete(id);
                 reject(error);
             }
         });
     }
+
+    /**
+     * Deliver a response from the Java backend. Called by {@code Window} with the rendered JSON
+     * response as a string.
+     */
+    function resolveResponse(id, response) {
+        var entry = pending.get(id);
+        if (!entry) {
+            return;
+        }
+        pending.delete(id);
+
+        var message;
+        try {
+            message = JSON.parse(response);
+        } catch (error) {
+            entry.reject(new Error('The Java backend returned an invalid IPC response.'));
+            return;
+        }
+
+        if (message && message.ok) {
+            entry.resolve(message.result);
+        } else {
+            entry.reject(errorFrom(message && message.error));
+        }
+    }
+
+    window.__apocryphaResolve = resolveResponse;
 
     /**
      * Subscribe to an event sent by the Java backend. Returns an unsubscribe function.
@@ -169,6 +185,111 @@
         }
     }
 
+    /**
+     * Tell the Java side that the document has loaded, so buffered events can be delivered.
+     */
+    function pageReady() {
+        reportTitle();
+        if (typeof window.__apocryphaPageReady === 'function') {
+            try {
+                window.__apocryphaPageReady();
+            } catch (error) {
+                console.error('[apocrypha] page ready callback failed:', error);
+            }
+        }
+    }
+
+    var reportedTitle;
+
+    /**
+     * Mirror the document title to the native window title.
+     */
+    function reportTitle() {
+        var title = document.title;
+        if (title && title !== reportedTitle) {
+            reportedTitle = title;
+            invoke('apocrypha:window:documentTitle', title);
+        }
+    }
+
+    function watchTitle() {
+        reportTitle();
+        if (document.head && typeof MutationObserver === 'function') {
+            new MutationObserver(reportTitle).observe(document.head, {
+                childList: true,
+                subtree: true,
+                characterData: true
+            });
+        }
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', watchTitle, { once: true });
+    } else {
+        watchTitle();
+    }
+
+    if (document.readyState === 'complete') {
+        setTimeout(pageReady, 0);
+    } else {
+        window.addEventListener('load', function () {
+            setTimeout(pageReady, 0);
+        }, { once: true });
+    }
+
+    /**
+     * Open an application URL in place and hand external links to the operating system browser.
+     * Returns true when the URL was handled.
+     */
+    function openLink(url) {
+        var target = url;
+        try {
+            target = new URL(url, window.location.href).href;
+        } catch (error) {
+            return false;
+        }
+
+        if (target === window.location.origin || target.indexOf(window.location.origin + '/') === 0) {
+            window.location.href = target;
+            return true;
+        }
+        if (/^(https?|mailto):/i.test(target)) {
+            invoke('apocrypha:window:openExternal', target);
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Hand external popups to the operating system browser and keep same-origin navigation in the
+     * current window.
+     */
+    var open = window.open;
+    window.open = function (url, name, features) {
+        if (typeof url === 'string' && url.length > 0 && openLink(url)) {
+            return null;
+        }
+        return open.apply(window, arguments);
+    };
+
+    /**
+     * The platform webview cannot intercept a popup at the browser level, so route
+     * {@code target="_blank"} links through the same policy as {@code window.open}.
+     */
+    document.addEventListener('click', function (event) {
+        var element = event.target;
+        if (!element || typeof element.closest !== 'function') {
+            return;
+        }
+        var anchor = element.closest('a[target]');
+        if (!anchor || !anchor.target || anchor.target.toLowerCase() !== '_blank' || !anchor.href) {
+            return;
+        }
+        if (openLink(anchor.href)) {
+            event.preventDefault();
+        }
+    }, true);
+
     var app = Object.freeze({
         name: META.name,
         version: META.version,
@@ -176,7 +297,7 @@
         platform: META.platform,
         arch: META.arch,
         java: META.java,
-        cef: META.cef,
+        webview: META.webview,
         quit: function () {
             return invoke('apocrypha:app:quit');
         },

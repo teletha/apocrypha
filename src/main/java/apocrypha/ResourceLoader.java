@@ -11,14 +11,15 @@ package apocrypha;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.URI;
 import java.nio.charset.StandardCharsets;
 
+import kiss.I;
+
 /**
- * Resolves {@code apocrypha://} URLs to classpath resources.
+ * Resolves request paths to classpath resources.
  * <p>
- * The loader is immutable and therefore safe to use from the multiple IO threads which JCEF uses
- * for scheme handlers.
+ * The loader is immutable and therefore safe to use from the multiple server threads which handle
+ * requests.
  */
 final class ResourceLoader {
 
@@ -37,83 +38,57 @@ final class ResourceLoader {
     }
 
     /**
-     * Whether this loader owns the URL.
+     * Load the resource for a request path.
      * 
-     * @param url A URL.
-     * @return True if the URL uses the configured scheme and host.
-     */
-    boolean handles(String url) {
-        if (url == null) {
-            return false;
-        }
-        try {
-            URI uri = URI.create(url);
-            return matches(uri);
-        } catch (RuntimeException error) {
-            return false;
-        }
-    }
-
-    /**
-     * Load the resource for an application URL.
-     * 
-     * @param url An application URL.
+     * @param rawPath A decoded URL path, such as {@code /index.html}.
      * @return A resource. Missing resources are represented by a 404 response.
      */
-    Resource load(String url) {
+    Resource load(String rawPath) {
         try {
-            URI uri = URI.create(url);
-            if (!matches(uri)) {
-                return notFound(url);
+            String path = rawPath == null || rawPath.isEmpty() ? "/" : rawPath;
+            if (path.indexOf('\0') >= 0 || path.indexOf('\\') >= 0) {
+                return notFound(path);
             }
 
-            String decoded = uri.getPath();
-            if (decoded == null || decoded.isEmpty()) {
-                decoded = "/";
-            }
-            if (decoded.indexOf('\0') >= 0 || decoded.indexOf('\\') >= 0) {
-                return notFound(url);
+            boolean directory = path.endsWith("/");
+            String normalized = normalize(path);
+            if (normalized == null) {
+                return notFound(path);
             }
 
-            boolean directory = decoded.isEmpty() || decoded.endsWith("/");
-            String path = normalize(decoded);
-            if (path == null) {
-                return notFound(url);
+            if (directory || normalized.isEmpty()) {
+                normalized = normalized.isEmpty() ? "index.html" : normalized + "/index.html";
             }
 
-            if (directory || path.isEmpty()) {
-                path = path.isEmpty() ? "index.html" : path + "/index.html";
-            }
-
-            if (path.equals("__apocrypha/bridge.js")) {
+            if (normalized.equals("__apocrypha/bridge.js")) {
                 return new Resource(200, MimeTypes.of("bridge.js"), bridge.script().getBytes(StandardCharsets.UTF_8));
             }
 
-            if (path.startsWith("__apocrypha/")) {
-                return notFound(url);
+            if (normalized.startsWith("__apocrypha/")) {
+                return notFound(path);
             }
 
-            byte[] data = read(path);
+            byte[] data = read(normalized);
             boolean fallback = false;
-            if (data == null && config.spaFallback() && !hasExtension(path)) {
-                path = entryPath();
-                data = read(path);
+            if (data == null && config.spaFallback() && !hasExtension(normalized)) {
+                normalized = entryPath();
+                data = read(normalized);
                 fallback = true;
             }
 
             if (data == null) {
-                return notFound(url);
+                return notFound(path);
             }
 
-            String mime = MimeTypes.of(path);
+            String mime = MimeTypes.of(normalized);
             if (mime.startsWith("text/html")) {
                 String html = new String(data, StandardCharsets.UTF_8);
                 data = bridge.inject(html, fallback).getBytes(StandardCharsets.UTF_8);
             }
             return new Resource(200, mime, data);
         } catch (RuntimeException error) {
-            Application.logger.log(System.Logger.Level.DEBUG, "Failed to resolve resource: " + url, error);
-            return notFound(url);
+            I.debug("apocrypha", new RuntimeException("Failed to resolve resource: " + rawPath, error));
+            return notFound(rawPath);
         }
     }
 
@@ -132,13 +107,6 @@ final class ResourceLoader {
         }
     }
 
-    private boolean matches(URI uri) {
-        return config.scheme().equalsIgnoreCase(uri.getScheme())
-                && config.host().equalsIgnoreCase(uri.getHost())
-                && uri.getPort() == -1
-                && uri.getUserInfo() == null;
-    }
-
     private String entryPath() {
         String entry = config.entry();
         if (entry.contains("://")) {
@@ -148,8 +116,8 @@ final class ResourceLoader {
         return normalized == null || normalized.isEmpty() ? "index.html" : normalized;
     }
 
-    private Resource notFound(String url) {
-        String requested = url == null ? "" : escape(url);
+    private Resource notFound(String path) {
+        String requested = path == null ? "" : escape(path);
         String html = """
                 <!doctype html>
                 <html lang="en">
@@ -217,6 +185,6 @@ final class ResourceLoader {
 
     @Override
     public String toString() {
-        return "ResourceLoader [root=" + root + ", url=" + config.baseUrl() + "]";
+        return "ResourceLoader [root=" + root + "]";
     }
 }
