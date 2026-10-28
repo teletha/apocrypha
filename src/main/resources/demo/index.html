@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="dark">
+    <title>Apocrypha</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header class="topbar">
+        <div class="brand">
+            <span class="mark" aria-hidden="true">
+                <svg viewBox="0 0 32 32" width="22" height="22">
+                    <path d="M16 3 29 27H3L16 3Z" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"/>
+                    <path d="M16 11v9M16 24v1" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>
+                </svg>
+            </span>
+            <span>Apocrypha</span>
+            <span class="pill" id="framework-version">framework</span>
+        </div>
+        <div class="window-actions" aria-label="Window controls">
+            <button type="button" class="icon" id="minimize" title="Minimize" aria-label="Minimize">&#8211;</button>
+            <button type="button" class="icon" id="maximize" title="Maximize" aria-label="Maximize">&#9633;</button>
+            <button type="button" class="icon danger" id="close" title="Close" aria-label="Close">&#215;</button>
+        </div>
+    </header>
+
+    <main>
+        <section class="hero">
+            <div>
+                <p class="eyebrow">Electron-style desktop applications for Java</p>
+                <h1>Java backend.<br><span>Chromium frontend.</span></h1>
+                <p class="lede">
+                    The window you are looking at is a native JFrame. The page is Chromium through JCEF.
+                    Everything between them is a small asynchronous IPC bridge.
+                </p>
+            </div>
+            <div class="metrics">
+                <div><strong id="metric-java">&#8212;</strong><span>Java</span></div>
+                <div><strong id="metric-cef">&#8212;</strong><span>Chromium</span></div>
+                <div><strong id="metric-platform">&#8212;</strong><span>Platform</span></div>
+            </div>
+        </section>
+
+        <section class="grid">
+            <article class="card accent">
+                <header>
+                    <h2>Request / response</h2>
+                    <span class="tag">async</span>
+                </header>
+                <p>Call a Java handler and await its JSON result.</p>
+                <form id="greet-form" class="inline-form">
+                    <input id="greet-name" value="JCEF" autocomplete="off" spellcheck="false" aria-label="Name">
+                    <button type="submit">Greet</button>
+                </form>
+                <pre id="greet-result" class="output">Waiting for the backend...</pre>
+            </article>
+
+            <article class="card">
+                <header>
+                    <h2>Java computation</h2>
+                    <span class="tag">long</span>
+                </header>
+                <p>Arguments cross the process boundary as JSON values.</p>
+                <form id="sum-form" class="inline-form">
+                    <input id="sum-a" type="number" value="21" aria-label="First number">
+                    <span class="plus">+</span>
+                    <input id="sum-b" type="number" value="21" aria-label="Second number">
+                    <button type="submit">Sum</button>
+                </form>
+                <pre id="sum-result" class="output">42</pre>
+            </article>
+
+            <article class="card">
+                <header>
+                    <h2>Events</h2>
+                    <span class="tag">bidirectional</span>
+                </header>
+                <p>Emit a renderer event. Java logs it and emits a response.</p>
+                <form id="event-form" class="inline-form">
+                    <input id="event-text" value="Hello from the renderer" autocomplete="off" aria-label="Event payload">
+                    <button type="submit">Emit</button>
+                </form>
+                <pre id="event-result" class="output">No event received yet.</pre>
+            </article>
+
+            <article class="card">
+                <header>
+                    <h2>Error transport</h2>
+                    <span class="tag">typed</span>
+                </header>
+                <p>Java exceptions become rejected JavaScript promises.</p>
+                <button type="button" id="fail" class="wide">Trigger IpcException</button>
+                <pre id="fail-result" class="output">Not triggered.</pre>
+            </article>
+
+            <article class="card">
+                <header>
+                    <h2>Window control</h2>
+                    <span class="tag">host</span>
+                </header>
+                <p>The renderer can drive the native window through the bridge.</p>
+                <div class="button-row">
+                    <button type="button" id="center">Center</button>
+                    <button type="button" id="toggle-maximize">Toggle maximize</button>
+                    <button type="button" id="devtools">DevTools</button>
+                    <button type="button" id="restart">Restart</button>
+                </div>
+                <pre id="window-result" class="output">Ready.</pre>
+            </article>
+
+            <article class="card">
+                <header>
+                    <h2>Runtime</h2>
+                    <span class="tag">metadata</span>
+                </header>
+                <dl class="facts">
+                    <div><dt>Application</dt><dd id="fact-name">&#8212;</dd></div>
+                    <div><dt>Version</dt><dd id="fact-version">&#8212;</dd></div>
+                    <div><dt>Framework</dt><dd id="fact-framework">&#8212;</dd></div>
+                    <div><dt>Architecture</dt><dd id="fact-arch">&#8212;</dd></div>
+                </dl>
+            </article>
+        </section>
+    </main>
+
+    <footer>
+        <span>HTML / CSS / JavaScript</span>
+        <span class="dot"></span>
+        <span>JCEF</span>
+        <span class="dot"></span>
+        <span>Java</span>
+    </footer>
+
+    <script src="app.js" defer></script>
+</body>
+</html>
