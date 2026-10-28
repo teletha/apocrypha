@@ -352,7 +352,6 @@ public class Project extends bee.api.Project {
         require("io.github.teletha", "sinobu");
         require("io.github.teletha", "stylist");
         require("io.github.teletha", "psychopath");
-        require("io.github.teletha", "conjure");
         // require("io.github.teletha", "reincarnation");
         require("io.github.teletha", "antibug").atTest();
 
