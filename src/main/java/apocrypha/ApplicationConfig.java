@@ -17,6 +17,9 @@ import java.util.Objects;
 import java.util.function.Consumer;
 import java.util.regex.Pattern;
 
+import com.formdev.flatlaf.FlatDarkLaf;
+import com.formdev.flatlaf.FlatLaf;
+
 import me.friwi.jcefmaven.CefAppBuilder;
 
 /**
@@ -57,6 +60,8 @@ public final class ApplicationConfig {
     private boolean spaFallback = true;
 
     private boolean restoreWindowState = true;
+
+    private FlatLaf theme = new FlatDarkLaf();
 
     private final List<String> cefArguments = new ArrayList<>();
 
@@ -231,6 +236,21 @@ public final class ApplicationConfig {
     }
 
     /**
+     * Set the FlatLaf theme. The default is {@link FlatDarkLaf}.
+     * <p>
+     * Apocrypha enables FlatLaf window decorations for every window. FlatLaf uses its own title
+     * bar and window border on Windows 10/11 and Linux, and keeps the native window decorations on
+     * macOS. Use {@code new FlatLightLaf()} for the light theme.
+     * 
+     * @param theme A FlatLaf theme.
+     * @return This configuration.
+     */
+    public ApplicationConfig theme(FlatLaf theme) {
+        this.theme = Objects.requireNonNull(theme, "theme");
+        return this;
+    }
+
+    /**
      * Add command line switches for Chromium.
      * 
      * @param arguments Chromium switches, such as {@code --disable-gpu}.
@@ -367,6 +387,15 @@ public final class ApplicationConfig {
      */
     public boolean restoreWindowState() {
         return restoreWindowState;
+    }
+
+    /**
+     * The FlatLaf theme used for windows and Swing components.
+     * 
+     * @return A theme.
+     */
+    public FlatLaf theme() {
+        return theme;
     }
 
     /**

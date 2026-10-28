@@ -23,7 +23,7 @@ public class Project extends bee.api.Project {
         describe("""
                 Apocrypha is an Electron-style desktop application framework for Java. The backend runs on the JVM and the user interface is built with standard web technologies (HTML, CSS, and JavaScript) rendered by Chromium through [JCEF](https://bitbucket.org/chromiumembedded/java-cef).
 
-                * Java application lifecycle, native windows, and configuration
+                * Java application lifecycle, native windows with FlatLaf decorations, and configuration
                 * Chromium renderer embedded in a Swing `JFrame` through JCEF
                 * `apocrypha://` protocol which serves a frontend build directly from the classpath
                 * A preload bridge which exposes `window.apocrypha` without requiring a bundler plugin
@@ -273,6 +273,7 @@ public class Project extends bee.api.Project {
                 * `installDirectory` - JCEF native bundle location (default `jcef-bundle`)
                 * `devTools` - open developer tools after the first load
                 * `spaFallback` - serve the entry document for extension-less routes
+                * `theme` - FlatLaf theme and window decoration colors (default `FlatDarkLaf`)
                 * `restoreWindowState` - persist and restore window bounds and maximized state (default `true`)
                 * `cefArguments` - additional Chromium switches
                 * `configureCef` - low-level JCEF builder customization
@@ -340,9 +341,11 @@ public class Project extends bee.api.Project {
         require("io.github.teletha", "sinobu");
         require("io.github.teletha", "stylist");
         require("io.github.teletha", "psychopath");
+        require("io.github.teletha", "reincarnation");
         require("io.github.teletha", "antibug").atTest();
 
         require("me.friwi", "jcefmaven");
+        require("com.formdev", "flatlaf");
 
         versionControlSystem("https://github.com/teletha/apocrypha");
     }

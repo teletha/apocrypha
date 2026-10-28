@@ -26,8 +26,12 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 
+import javax.swing.JDialog;
+import javax.swing.JFrame;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
+
+import com.formdev.flatlaf.FlatLaf;
 
 import org.cef.CefApp;
 import org.cef.CefApp.CefAppState;
@@ -481,6 +485,7 @@ public abstract class Application {
             return;
         }
 
+        installLookAndFeel();
         running = true;
         logger.log(System.Logger.Level.INFO, "Starting " + config.name() + " " + config.version() + " (" + config
                 .baseUrl() + ")");
@@ -490,6 +495,19 @@ public abstract class Application {
             logger.log(System.Logger.Level.ERROR, "The application failed to start", error);
             quit();
         }
+    }
+
+    /**
+     * Install the configured FlatLaf theme and enable its window decorations. This must run on the
+     * event dispatch thread before the first window is created.
+     */
+    private void installLookAndFeel() {
+        FlatLaf.setup(config.theme());
+
+        // On Windows 10/11 FlatLaf uses its window decorations automatically. On Linux the frames
+        // must opt in before they are created. macOS keeps its native decorations.
+        JFrame.setDefaultLookAndFeelDecorated(true);
+        JDialog.setDefaultLookAndFeelDecorated(true);
     }
 
     private void doRestart() {

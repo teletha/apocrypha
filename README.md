@@ -9,7 +9,7 @@
 ## Summary
 Apocrypha is an Electron-style desktop application framework for Java. The backend runs on the JVM and the user interface is built with standard web technologies (HTML, CSS, and JavaScript) rendered by Chromium through [JCEF](https://bitbucket.org/chromiumembedded/java-cef).
 
-* Java application lifecycle, native windows, and configuration
+* Java application lifecycle, native windows with FlatLaf decorations, and configuration
 * Chromium renderer embedded in a Swing `JFrame` through JCEF
 * `apocrypha://` protocol which serves a frontend build directly from the classpath
 * A preload bridge which exposes `window.apocrypha` without requiring a bundler plugin
@@ -259,6 +259,7 @@ Because the protocol reads resources from the classpath, Chromium's regular deve
 * `installDirectory` - JCEF native bundle location (default `jcef-bundle`)
 * `devTools` - open developer tools after the first load
 * `spaFallback` - serve the entry document for extension-less routes
+* `theme` - FlatLaf theme and window decoration colors (default `FlatDarkLaf`)
 * `restoreWindowState` - persist and restore window bounds and maximized state (default `true`)
 * `cefArguments` - additional Chromium switches
 * `configureCef` - low-level JCEF builder customization
@@ -418,6 +419,7 @@ Apocrypha depends on the following products on runtime.
 * [commons-io-2.20.0](https://mvnrepository.com/artifact/commons-io/commons-io/2.20.0)
 * [commons-lang3-3.18.0](https://mvnrepository.com/artifact/org.apache.commons/commons-lang3/3.18.0)
 * [error_prone_annotations-2.27.0](https://mvnrepository.com/artifact/com.google.errorprone/error_prone_annotations/2.27.0)
+* [flatlaf-3.7.2](https://mvnrepository.com/artifact/com.formdev/flatlaf/3.7.2)
 * [gluegen-rt-v2.4.0](https://mvnrepository.com/artifact/me.friwi/gluegen-rt/v2.4.0)
 * [gson-2.11.0](https://mvnrepository.com/artifact/com.google.code.gson/gson/2.11.0)
 * [jcef-api-jcef-17e805a+cef-152.0.6+g708dc14+chromium-152.0.7977.83](https://mvnrepository.com/artifact/me.friwi/jcef-api/jcef-17e805a+cef-152.0.6+g708dc14+chromium-152.0.7977.83)

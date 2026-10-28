@@ -13,6 +13,9 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import java.nio.file.Path;
 
+import com.formdev.flatlaf.FlatDarkLaf;
+import com.formdev.flatlaf.FlatLightLaf;
+
 import org.junit.jupiter.api.Test;
 
 class ApplicationConfigTest {
@@ -55,6 +58,17 @@ class ApplicationConfigTest {
         assertTrue(config.restoreWindowState());
         assertSame(config, config.restoreWindowState(false));
         assertFalse(config.restoreWindowState());
+    }
+
+    @Test
+    void theme() {
+        ApplicationConfig config = new ApplicationConfig();
+        assertInstanceOf(FlatDarkLaf.class, config.theme());
+
+        FlatLightLaf light = new FlatLightLaf();
+        assertSame(config, config.theme(light));
+        assertSame(light, config.theme());
+        assertThrows(NullPointerException.class, () -> config.theme(null));
     }
 
     @Test
