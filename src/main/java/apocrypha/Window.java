@@ -475,21 +475,39 @@ public final class Window {
     /**
      * Open the webview developer tools.
      * <p>
-     * The platform webview does not expose a programmatic developer-tools API. Enable them with
-     * {@link ApplicationConfig#devTools(boolean)} and use {@code F12} or the context menu.
+     * On Windows this brings the window to the foreground and posts the standard F12 accelerator to
+     * the embedded WebView2 window. WebView2 requires the window to be active before it handles the
+     * accelerator. Other platforms rely on their native F12 / context-menu support. Developer tools
+     * must be enabled with {@link ApplicationConfig#devTools(boolean)}.
      * 
      * @return This window.
      */
     public Window openDevTools() {
-        if (!devToolsHinted) {
-            devToolsHinted = true;
-            if (application.config().devTools()) {
-                I.info("apocrypha",
-                        "Developer tools are enabled; press F12 or use the webview context menu.");
-            } else {
+        if (!application.config().devTools()) {
+            if (!devToolsHinted) {
+                devToolsHinted = true;
                 I.warn("apocrypha",
                         "Developer tools are disabled; enable them with ApplicationConfig.devTools(true).");
             }
+            return this;
+        }
+
+        if (WINDOWS) {
+            long window = handle();
+            if (window != 0) {
+                try {
+                    Win32.focus(window);
+                    Win32.openDevTools(window);
+                } catch (Throwable error) {
+                    I.warn("apocrypha", new RuntimeException("Failed to open the webview developer tools", error));
+                }
+                return this;
+            }
+        }
+
+        if (!devToolsHinted) {
+            devToolsHinted = true;
+            I.info("apocrypha", "Press F12 or use the webview context menu to open developer tools.");
         }
         return this;
     }

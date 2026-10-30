@@ -59,6 +59,12 @@ public final class Win32 {
 
     private static final int SWP_FRAMECHANGED = 0x0020;
 
+    private static final int WM_KEYDOWN = 0x0100;
+
+    private static final int WM_KEYUP = 0x0101;
+
+    private static final long VK_F12 = 0x7B;
+
     private static final MemorySegment HWND_TOPMOST = MemorySegment.ofAddress(-1L);
 
     private static final MemorySegment HWND_NOTOPMOST = MemorySegment.ofAddress(-2L);
@@ -89,6 +95,12 @@ public final class Win32 {
             FunctionDescriptor.of(JAVA_INT, ADDRESS));
 
     private static final MethodHandle SetFocus = down("SetFocus", FunctionDescriptor.of(ADDRESS, ADDRESS));
+
+    private static final MethodHandle FindWindowExA = down("FindWindowExA",
+            FunctionDescriptor.of(ADDRESS, ADDRESS, ADDRESS, ADDRESS, ADDRESS));
+
+    private static final MethodHandle PostMessageW = down("PostMessageW",
+            FunctionDescriptor.of(JAVA_INT, ADDRESS, JAVA_INT, ADDRESS, ADDRESS));
 
     private Win32() {
     }
@@ -329,6 +341,71 @@ public final class Win32 {
             MemorySegment previous = (MemorySegment) SetFocus.invokeExact(handle);
         } catch (Throwable error) {
             throw new IllegalStateException("Failed to focus the window", error);
+        }
+    }
+
+    /**
+     * Ask the WebView2 child window to open its developer tools.
+     * <p>
+     * avaje-webview does not expose {@code ICoreWebView2::OpenDevToolsWindow}, so this posts the
+     * standard F12 accelerator to the embedded WebView2 window. Developer tools must have been
+     * enabled when the webview was created.
+     *
+     * @param window The top-level webview window handle.
+     * @return True if the F12 accelerator was posted.
+     */
+    public static boolean openDevTools(long window) {
+        if (window == 0) {
+            return false;
+        }
+
+        long target = findWindow(window, "Chrome_WidgetWin_1");
+        if (target == 0) {
+            target = findWindow(window, "Chrome_RenderWidgetHostHWND");
+        }
+        if (target == 0) {
+            target = window;
+        }
+
+        try {
+            MemorySegment handle = MemorySegment.ofAddress(target);
+            MemorySegment key = MemorySegment.ofAddress(VK_F12);
+            int down = (int) PostMessageW.invokeExact(handle, WM_KEYDOWN, key, MemorySegment.NULL);
+            int up = (int) PostMessageW.invokeExact(handle, WM_KEYUP, key, MemorySegment.NULL);
+            return down != 0 && up != 0;
+        } catch (Throwable error) {
+            throw new IllegalStateException("Failed to open the webview developer tools", error);
+        }
+    }
+
+    private static long findWindow(long parent, String className) {
+        if (parent == 0) {
+            return 0;
+        }
+
+        try (Arena arena = Arena.ofConfined()) {
+            MemorySegment name = arena.allocateFrom(className);
+            MemorySegment direct = (MemorySegment) FindWindowExA.invokeExact(MemorySegment.ofAddress(parent),
+                    MemorySegment.NULL, name, MemorySegment.NULL);
+            if (direct != null && direct.address() != 0) {
+                return direct.address();
+            }
+
+            MemorySegment after = MemorySegment.NULL;
+            while (true) {
+                MemorySegment child = (MemorySegment) FindWindowExA.invokeExact(MemorySegment.ofAddress(parent), after,
+                        MemorySegment.NULL, MemorySegment.NULL);
+                if (child == null || child.address() == 0) {
+                    return 0;
+                }
+                long found = findWindow(child.address(), className);
+                if (found != 0) {
+                    return found;
+                }
+                after = child;
+            }
+        } catch (Throwable error) {
+            throw new IllegalStateException("Failed to find the webview child window", error);
         }
     }
 

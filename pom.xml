@@ -25,15 +25,15 @@ JSON is handled by [Sinobu](https://github.com/teletha/sinobu) (`I.write`, `I.js
 
 ```
 +--------------------- Java backend ---------------------+
-|  Application -&gt; Window -&gt; Webview (avaje-webview)     |
+|  Application -&gt; Window -&gt; Webview (avaje-webview)       |
 |       |              |                                 |
 |       +---- Ipc &lt;----+---- bound JS functions          |
 +----------------------|---------------------------------+
                        |  JSON request / response
                        |  events
 +----------------------|---------------------------------+
-|  window.apocrypha &lt;--+  native webview                |
-|  HTML / CSS / JavaScript                                |
+|  window.apocrypha &lt;--+  native webview                 |
+|  HTML / CSS / JavaScript                               |
 +--------------------------------------------------------+
 ```
 
@@ -216,7 +216,7 @@ The bridge is injected automatically into HTML served by the application server.
 | `apocrypha.window.setResizable(value)` | Toggle resizing. |
 | `apocrypha.window.reload()` | Reload the current document. |
 | `apocrypha.window.load(url)` | Navigate the window. |
-| `apocrypha.window.openDevTools()` | Log how to open the webview developer tools. |
+| `apocrypha.window.openDevTools()` | Open the webview developer tools. |
 | `apocrypha.window.close()` | Close the window. |
 
 ## Frontend Tooling
@@ -253,7 +253,7 @@ Because the server reads resources from the classpath, the webview&apos;s regula
 * `resourceRoot` - classpath directory containing the frontend (default `web`)
 * `entry` - entry document or an absolute URL for a development server
 * `dataDirectory` - framework state directory (default `~/.apocrypha/&lt;application-name&gt;`)
-* `devTools` - enable the webview developer tools (default `false`)
+* `devTools` - enable the webview developer tools (default `true`; set it to `false` for production)
 * `spaFallback` - serve the entry document for extension-less routes
 * `theme` - FlatLaf theme for Swing dialogs and components (default `FlatDarkLaf`)
 * `restoreWindowState` - persist and restore window bounds and maximized state (default `true`)
@@ -269,7 +269,7 @@ The browser backend is avaje-webview now, so a few JCEF-specific APIs are gone:
 * `installDirectory`, `cefArguments`, and `configureCef` were removed. The platform webview uses the system runtime (WebView2 on Windows).
 * `Window.browser()` returns a `io.avaje.webview.Webview` and is `null` until the window is shown.
 * `Window.frame()` was removed because the main window is no longer a `JFrame`. Use `Window.browser()` for the native webview.
-* `Window.openDevTools()` no longer opens the tools programmatically. Enable them with `devTools(true)` (or `--devtools`) and use `F12` or the context menu.
+* `Window.openDevTools()` opens the tools on Windows by activating the window and sending the WebView2 F12 accelerator. Developer tools must be enabled with `devTools(true)`, which is the default. `F12` and the context menu work as usual.
 
 ## Window State
 
@@ -325,12 +325,12 @@ Restart requires the application to be started through `Application.launch(...)`
 * The build currently includes only the avaje-webview Windows x86_64 native artifact.
 * Windows requires the Microsoft Edge WebView2 runtime (preinstalled on Windows 10/11). Linux requires WebKitGTK.
 * The main window is a native avaje-webview window. On macOS, launch with `-XstartOnFirstThread`.
-* The Windows-specific window helpers provide position, bounds, always-on-top, resizability, and hide/show. Other platforms use avaje-webview's window API and may not support every operation.
+* The Windows-specific window helpers provide position, bounds, always-on-top, resizability, and hide/show. Other platforms use avaje-webview&apos;s window API and may not support every operation.
 * Each window owns its own native webview instance.
 * The `apocrypha:` IPC namespace is reserved by the framework.
 * External `target=_blank` links are opened in the system browser.
 * Window state is stored under `&lt;dataDirectory&gt;/window-state.json`.
-* The repository contains a demo application at `apocrypha.Main`. Pass `--devtools` to enable the webview developer tools on startup.</description>
+* The repository contains a demo application at `apocrypha.Main`. Developer tools are enabled by default; set `devTools(false)` for a production build.</description>
 	<licenses>
 		<license>
 			<name>MIT License</name>
@@ -343,13 +343,6 @@ Restart requires the application to be started through `Application.launch(...)`
 			<artifactId>antibug</artifactId>
 			<version>1.16.1</version>
 			<scope>test</scope>
-			<exclusions/>
-		</dependency>
-		<dependency>
-			<groupId>com.formdev</groupId>
-			<artifactId>flatlaf</artifactId>
-			<version>3.7.2</version>
-			<scope>compile</scope>
 			<exclusions/>
 		</dependency>
 		<dependency>
@@ -367,9 +360,23 @@ Restart requires the application to be started through `Application.launch(...)`
 			<exclusions/>
 		</dependency>
 		<dependency>
+			<groupId>com.formdev</groupId>
+			<artifactId>flatlaf</artifactId>
+			<version>3.7.2</version>
+			<scope>compile</scope>
+			<exclusions/>
+		</dependency>
+		<dependency>
 			<groupId>io.github.teletha</groupId>
 			<artifactId>psychopath</artifactId>
 			<version>2.3.0</version>
+			<scope>compile</scope>
+			<exclusions/>
+		</dependency>
+		<dependency>
+			<groupId>io.github.teletha</groupId>
+			<artifactId>reincarnation</artifactId>
+			<version>1.10.2</version>
 			<scope>compile</scope>
 			<exclusions/>
 		</dependency>

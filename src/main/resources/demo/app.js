@@ -125,7 +125,7 @@
     $('#devtools').addEventListener('click', async () => {
         try {
             await bridge.window.openDevTools();
-            setOutput('#window-result', 'Developer tools: press F12 or use the context menu (start with --devtools).');
+            setOutput('#window-result', 'Developer tools opened. You can also press F12 or use the context menu.');
         } catch (error) {
             setOutput('#window-result', describeError(error), true);
         }

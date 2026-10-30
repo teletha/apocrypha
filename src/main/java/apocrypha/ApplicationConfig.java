@@ -42,7 +42,7 @@ public final class ApplicationConfig {
 
     private Path dataDirectory;
 
-    private boolean devTools;
+    private boolean devTools = true;
 
     private boolean quitWhenLastWindowClosed = true;
 
@@ -131,7 +131,7 @@ public final class ApplicationConfig {
 
     /**
      * Enable the webview developer tools. They can then be opened with {@code F12} or from the
-     * context menu. The default is {@code false}.
+     * context menu. The default is {@code true}; set it to {@code false} for a production build.
      * 
      * @param enable Whether to enable the developer tools.
      * @return This configuration.

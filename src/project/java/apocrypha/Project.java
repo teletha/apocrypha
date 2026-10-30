@@ -18,7 +18,21 @@ public class Project extends bee.api.Project {
     {
         product("io.github.teletha", "apocrypha", ref("version.txt"));
         license(MIT);
+
         require(SourceVersion.latest(), SourceVersion.RELEASE_25);
+
+        require("io.github.teletha", "sinobu");
+        require("io.github.teletha", "stylist");
+        require("io.github.teletha", "psychopath");
+        require("io.github.teletha", "reincarnation");
+        require("io.github.teletha", "lycoris");
+        require("io.github.teletha", "antibug").atTest();
+
+        require("io.avaje.webview", "avaje-webview", "0.19");
+        require("io.avaje.webview", "avaje-webview-windows-x86_64", "0.19");
+        require("com.formdev", "flatlaf");
+
+        versionControlSystem("https://github.com/teletha/apocrypha");
 
         describe("""
                 Apocrypha is an Electron-style desktop application framework for Java. The backend runs on the JVM and the user interface is built with standard web technologies (HTML, CSS, and JavaScript) rendered by the platform webview through [avaje-webview](https://github.com/avaje/avaje-webview).
@@ -232,7 +246,7 @@ public class Project extends bee.api.Project {
                 | `apocrypha.window.setResizable(value)` | Toggle resizing. |
                 | `apocrypha.window.reload()` | Reload the current document. |
                 | `apocrypha.window.load(url)` | Navigate the window. |
-                | `apocrypha.window.openDevTools()` | Log how to open the webview developer tools. |
+                | `apocrypha.window.openDevTools()` | Open the webview developer tools. |
                 | `apocrypha.window.close()` | Close the window. |
 
                 ## Frontend Tooling
@@ -269,7 +283,7 @@ public class Project extends bee.api.Project {
                 * `resourceRoot` - classpath directory containing the frontend (default `web`)
                 * `entry` - entry document or an absolute URL for a development server
                 * `dataDirectory` - framework state directory (default `~/.apocrypha/<application-name>`)
-                * `devTools` - enable the webview developer tools (default `false`)
+                * `devTools` - enable the webview developer tools (default `true`; set it to `false` for production)
                 * `spaFallback` - serve the entry document for extension-less routes
                 * `theme` - FlatLaf theme for Swing dialogs and components (default `FlatDarkLaf`)
                 * `restoreWindowState` - persist and restore window bounds and maximized state (default `true`)
@@ -285,7 +299,7 @@ public class Project extends bee.api.Project {
                 * `installDirectory`, `cefArguments`, and `configureCef` were removed. The platform webview uses the system runtime (WebView2 on Windows).
                 * `Window.browser()` returns a `io.avaje.webview.Webview` and is `null` until the window is shown.
                 * `Window.frame()` was removed because the main window is no longer a `JFrame`. Use `Window.browser()` for the native webview.
-                * `Window.openDevTools()` no longer opens the tools programmatically. Enable them with `devTools(true)` (or `--devtools`) and use `F12` or the context menu.
+                * `Window.openDevTools()` opens the tools on Windows by activating the window and sending the WebView2 F12 accelerator. Developer tools must be enabled with `devTools(true)`, which is the default. `F12` and the context menu work as usual.
 
                 ## Window State
 
@@ -346,19 +360,7 @@ public class Project extends bee.api.Project {
                 * The `apocrypha:` IPC namespace is reserved by the framework.
                 * External `target=_blank` links are opened in the system browser.
                 * Window state is stored under `<dataDirectory>/window-state.json`.
-                * The repository contains a demo application at `apocrypha.Main`. Pass `--devtools` to enable the webview developer tools on startup.
+                * The repository contains a demo application at `apocrypha.Main`. Developer tools are enabled by default; set `devTools(false)` for a production build.
                 """);
-
-        require("io.github.teletha", "sinobu");
-        require("io.github.teletha", "stylist");
-        require("io.github.teletha", "psychopath");
-        // require("io.github.teletha", "reincarnation");
-        require("io.github.teletha", "antibug").atTest();
-
-        require("io.avaje.webview", "avaje-webview", "0.19");
-        require("io.avaje.webview", "avaje-webview-windows-x86_64", "0.19");
-        require("com.formdev", "flatlaf");
-
-        versionControlSystem("https://github.com/teletha/apocrypha");
     }
 }

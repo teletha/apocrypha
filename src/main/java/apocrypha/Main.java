@@ -29,7 +29,8 @@ public class Main extends Application {
 
     @Override
     protected void configure(ApplicationConfig config) {
-        config.name("Apocrypha").version(FRAMEWORK_VERSION).resourceRoot("demo").entry("index.html").spaFallback(true);
+        config.name("Apocrypha").version(FRAMEWORK_VERSION).resourceRoot("demo").entry("index.html").spaFallback(true)
+                .devTools(true);
     }
 
     @Override

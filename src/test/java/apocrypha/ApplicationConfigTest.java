@@ -93,6 +93,8 @@ class ApplicationConfigTest {
     @Test
     void devTools() {
         ApplicationConfig config = new ApplicationConfig();
+        assertTrue(config.devTools());
+        assertSame(config, config.devTools(false));
         assertFalse(config.devTools());
         assertSame(config, config.devTools(true));
         assertTrue(config.devTools());

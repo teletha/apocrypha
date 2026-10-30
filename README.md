@@ -218,7 +218,7 @@ The bridge is injected automatically into HTML served by the application server.
 | `apocrypha.window.setResizable(value)` | Toggle resizing. |
 | `apocrypha.window.reload()` | Reload the current document. |
 | `apocrypha.window.load(url)` | Navigate the window. |
-| `apocrypha.window.openDevTools()` | Log how to open the webview developer tools. |
+| `apocrypha.window.openDevTools()` | Open the webview developer tools. |
 | `apocrypha.window.close()` | Close the window. |
 
 ## Frontend Tooling
@@ -255,7 +255,7 @@ Because the server reads resources from the classpath, the webview's regular dev
 * `resourceRoot` - classpath directory containing the frontend (default `web`)
 * `entry` - entry document or an absolute URL for a development server
 * `dataDirectory` - framework state directory (default `~/.apocrypha/<application-name>`)
-* `devTools` - enable the webview developer tools (default `false`)
+* `devTools` - enable the webview developer tools (default `true`; set it to `false` for production)
 * `spaFallback` - serve the entry document for extension-less routes
 * `theme` - FlatLaf theme for Swing dialogs and components (default `FlatDarkLaf`)
 * `restoreWindowState` - persist and restore window bounds and maximized state (default `true`)
@@ -271,7 +271,7 @@ The browser backend is avaje-webview now, so a few JCEF-specific APIs are gone:
 * `installDirectory`, `cefArguments`, and `configureCef` were removed. The platform webview uses the system runtime (WebView2 on Windows).
 * `Window.browser()` returns a `io.avaje.webview.Webview` and is `null` until the window is shown.
 * `Window.frame()` was removed because the main window is no longer a `JFrame`. Use `Window.browser()` for the native webview.
-* `Window.openDevTools()` no longer opens the tools programmatically. Enable them with `devTools(true)` (or `--devtools`) and use `F12` or the context menu.
+* `Window.openDevTools()` opens the tools on Windows by activating the window and sending the WebView2 F12 accelerator. Developer tools must be enabled with `devTools(true)`, which is the default. `F12` and the context menu work as usual.
 
 ## Window State
 
@@ -332,7 +332,7 @@ Restart requires the application to be started through `Application.launch(...)`
 * The `apocrypha:` IPC namespace is reserved by the framework.
 * External `target=_blank` links are opened in the system browser.
 * Window state is stored under `<dataDirectory>/window-state.json`.
-* The repository contains a demo application at `apocrypha.Main`. Pass `--devtools` to enable the webview developer tools on startup.
+* The repository contains a demo application at `apocrypha.Main`. Developer tools are enabled by default; set `devTools(false)` for a production build.
 <p align="right"><a href="#top">back to top</a></p>
 
 
@@ -425,15 +425,13 @@ If you think something might be a bug, but you're not sure, ask on StackOverflow
 
 ## Dependency
 Apocrypha depends on the following products on runtime.
-* [commons-codec-1.19.0](https://mvnrepository.com/artifact/commons-codec/commons-codec/1.19.0)
-* [commons-compress-1.28.0](https://mvnrepository.com/artifact/org.apache.commons/commons-compress/1.28.0)
-* [commons-io-2.20.0](https://mvnrepository.com/artifact/commons-io/commons-io/2.20.0)
-* [commons-lang3-3.18.0](https://mvnrepository.com/artifact/org.apache.commons/commons-lang3/3.18.0)
-* [error_prone_annotations-2.27.0](https://mvnrepository.com/artifact/com.google.errorprone/error_prone_annotations/2.27.0)
+* [asm-9.11.1](https://mvnrepository.com/artifact/org.ow2.asm/asm/9.11.1)
 * [avaje-webview-0.19](https://mvnrepository.com/artifact/io.avaje.webview/avaje-webview/0.19)
 * [avaje-webview-windows-x86_64-0.19](https://mvnrepository.com/artifact/io.avaje.webview/avaje-webview-windows-x86_64/0.19)
 * [flatlaf-3.7.2](https://mvnrepository.com/artifact/com.formdev/flatlaf/3.7.2)
+* [jspecify-1.0.0](https://mvnrepository.com/artifact/org.jspecify/jspecify/1.0.0)
 * [psychopath-2.3.0](https://mvnrepository.com/artifact/io.github.teletha/psychopath/2.3.0)
+* [reincarnation-1.10.2](https://mvnrepository.com/artifact/io.github.teletha/reincarnation/1.10.2)
 * [sinobu-4.14.0](https://mvnrepository.com/artifact/io.github.teletha/sinobu/4.14.0)
 * [stylist-1.16.1](https://mvnrepository.com/artifact/io.github.teletha/stylist/1.16.1)
 <p align="right"><a href="#top">back to top</a></p>
