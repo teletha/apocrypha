@@ -228,6 +228,32 @@ public abstract class Application {
     }
 
     /**
+     * Serve dynamically generated content over HTTP.
+     * <p>
+     * Registered prefixes are matched against request paths before the classpath resources, which
+     * lets binary content such as thumbnails, photo originals or generated files be delivered to
+     * the renderer with proper content types and cache headers, instead of passing megabytes of
+     * base64 through IPC. The renderer references the content with an ordinary URL:
+     * 
+     * <pre>{@code
+     * serve("/photo/", (path, query) -> Response.ok("image/webp", bytes));
+     * }</pre>
+     * 
+     * A route handler returning {@code null} falls through to the static frontend. HTML produced by
+     * a route does not receive the bridge script; use IPC documents for executable content.
+     * 
+     * @param prefix A request path prefix starting with a slash. The {@code /__apocrypha} namespace
+     *            is reserved by the framework.
+     * @param route A handler. It runs on a virtual thread per request.
+     */
+    public final void serve(String prefix, Route route) {
+        if (server == null) {
+            throw new IllegalStateException("Routes cannot be registered before the application server starts; use onStart()");
+        }
+        server.route(prefix, route);
+    }
+
+    /**
      * Quit the application. The last window may also trigger this automatically.
      */
     public final void quit() {

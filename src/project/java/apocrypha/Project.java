@@ -45,6 +45,7 @@ public class Project extends bee.api.Project {
                 * Typed errors which arrive in JavaScript as rejected promises
                 * Java model classes (records, beans with getter/setter pairs, and public fields) over IPC
                 * Annotation-based channel registration with `@IpcChannel`
+                * Dynamic HTTP routes (`Application.serve`) for binary content such as images and generated files
                 * Persistent window position, size, and maximized state with per-window identifiers
                 * Application restart from Java or JavaScript, preserving window state
                 * Works with any browser toolchain that can emit static files (Vite, React, Vue, Svelte, and so on)
@@ -214,6 +215,39 @@ public class Project extends bee.api.Project {
                 * Static methods are invoked without an instance. `register(Class)` instantiates the class only when it contains instance methods.
                 * `IpcHandler` lambdas remain available through `ipc().handle(...)`.
                 * The renderer event callback receives a `JSON` value; use `as(Model.class)` or `json.text(...)` to read it.
+
+                ## Dynamic Content
+
+                IPC carries JSON only, so binary payloads such as thumbnails or photo originals should go through
+                HTTP instead. `Application.serve` registers a route on the application server; registered prefixes
+                are matched before the classpath resources. A handler receives the path below its prefix and the
+                query string, and returns a `Response` (`null` falls through to the static frontend). Handlers run
+                on a virtual thread per request, so blocking reads from a database or disk are acceptable.
+
+                ```java
+                @Override
+                protected void onStart() {
+                    serve("/photo/", (path, query) -> {
+                        long id = Long.parseLong(path.substring(1).split("/")[0]);
+                        byte[] webp = thumbnails.load(id);
+                        if (webp == null) {
+                            return Response.notFound();
+                        }
+                        return Response.ok("image/webp", webp).cache("public, max-age=604800");
+                    });
+                }
+                ```
+
+                The renderer references the content with an ordinary URL, which lets the browser cache it and load
+                it lazily:
+
+                ```html
+                <img src="/photo/1234/thumb?v=1699999999" loading="lazy">
+                ```
+
+                HTML returned by a route does not receive the bridge script; keep executable content on IPC
+                channels and serve documents from the classpath. Only validate identifiers in the path rather than
+                resolving file system paths supplied by the renderer.
 
                 ## JavaScript API
 
