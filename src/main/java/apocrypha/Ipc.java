@@ -157,6 +157,8 @@ public final class Ipc {
             window(request).openDevTools();
             return null;
         });
+        builtin("apocrypha:window:chooseFolder", request -> window(request).chooseFolder(
+                request.isEmpty() ? null : request.string(0)));
         builtin("apocrypha:window:openExternal", request -> {
             application.openExternal(request.string(0));
             return null;

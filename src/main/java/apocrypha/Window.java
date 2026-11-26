@@ -513,6 +513,25 @@ public final class Window {
     }
 
     /**
+     * Open the operating system's native folder chooser in front of this window.
+     *
+     * @return The selected directory, or null when the user cancels.
+     */
+    public String chooseFolder() {
+        return chooseFolder(null);
+    }
+
+    /**
+     * Open the operating system's native folder chooser in front of this window.
+     *
+     * @param title The dialog title, or null for the platform default.
+     * @return The selected directory, or null when the user cancels.
+     */
+    public String chooseFolder(String title) {
+        return Dialogs.chooseFolder(this, title);
+    }
+
+    /**
      * Execute JavaScript in the current document. Scripts which are executed before the document has
      * loaded are queued and run afterwards.
      * 
@@ -893,7 +912,7 @@ public final class Window {
         watcher.start();
     }
 
-    private long handle() {
+    long handle() {
         Webview browser = webview;
         return browser == null ? 0 : browser.nativeWindowPointer().address();
     }

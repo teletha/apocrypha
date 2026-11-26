@@ -369,11 +369,18 @@
         }
     });
 
+    var dialogApi = Object.freeze({
+        chooseFolder: function (title) {
+            return invoke('apocrypha:window:chooseFolder', title === undefined ? null : title);
+        }
+    });
+
     var api = Object.freeze({
         __apocrypha: true,
         version: META.frameworkVersion,
         app: app,
         window: windowApi,
+        dialog: dialogApi,
         invoke: invoke,
         on: on,
         once: once,

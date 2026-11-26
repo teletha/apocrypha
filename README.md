@@ -19,6 +19,7 @@ Apocrypha is an Electron-style desktop application framework for Java. The backe
 * Annotation-based channel registration with `@IpcChannel`
 * Dynamic HTTP routes (`Application.serve`) for binary content such as images and generated files
 * Persistent window position, size, and maximized state with per-window identifiers
+* Native system folder chooser through `Window.chooseFolder()` / `apocrypha.dialog.chooseFolder()`
 * Application restart from Java or JavaScript, preserving window state
 * Works with any browser toolchain that can emit static files (Vite, React, Vue, Svelte, and so on)
 
@@ -253,6 +254,7 @@ The bridge is injected automatically into HTML served by the application server.
 | `apocrypha.window.reload()` | Reload the current document. |
 | `apocrypha.window.load(url)` | Navigate the window. |
 | `apocrypha.window.openDevTools()` | Open the webview developer tools. |
+| `apocrypha.dialog.chooseFolder(title?)` | Open the operating system's native folder chooser and return the path, or null when canceled. |
 | `apocrypha.window.close()` | Close the window. |
 
 ## Frontend Tooling
